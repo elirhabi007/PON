@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Catatan Hutang dari Google Sheets</title>
+  <style>
+    body{
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1{font-size:1.4rem;margin-bottom:8px}
+    .small{font-size:0.9rem;color:#555}
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:0.9rem}
+    th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}
+    th{background:#f3f4f6}
+  </style>
+</head>
+<body>
+  <h1>Catatan Hutang dari Google Sheets</h1>
+  <p class="small">
+    Data ini diambil dari Google Sheets yang sudah di-publish:<br>
+    <code>https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv</code>
+  </p>
+
+  <div id="status" class="small">Status: mengambil data...</div>
+  <div id="tableWrap">Menunggu data...</div>
+
+<script>
+// URL CSV dari link yang kamu kirim (pubhtml -> output=csv)
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
+
+// Ambil CSV & parse ke array
+async function fetchCsv(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error("Gagal fetch: " + res.status);
+  const text = await res.text();
+  return csvToArray(text);
+}
+
+// Parser CSV sederhana (asumsi tidak ada koma di dalam tanda kutip)
+function csvToArray(str){
+  const rows = str.trim().split(/\r?\n/);
+  return rows.map(row => row.split(",").map(v => v.replace(/^"|"$/g,"")));
+}
+
+function buildTableHTML(data){
+  if(!data || data.length === 0) return "Tidak ada data.";
+  const [header, ...rows] = data;
+  let html = "<table><thead><tr>";
+  header.forEach(h => html += "<th>"+escapeHtml(h)+"</th>");
+  html += "</tr></thead><tbody>";
+  rows.forEach(r => {
+    // skip baris kosong
+    if(r.every(c => c === "")) return;
+    html += "<tr>";
+    r.forEach(c => html += "<td>"+escapeHtml(c)+"</td>");
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+(async function main(){
+  const statusEl = document.getElementById("status");
+  const tableWrap = document.getElementById("tableWrap");
+  try {
+    statusEl.textContent = "Status: mengambil data dari Google Sheets...";
+    const data = await fetchCsv(CSV_URL);
+    tableWrap.innerHTML = buildTableHTML(data);
+    statusEl.textContent = "Status: data berhasil diambil.";
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Status: error - " + err.message;
+    tableWrap.textContent = "Gagal mengambil data.";
+  }
+})();
+</script>
+</body>
+</html>
