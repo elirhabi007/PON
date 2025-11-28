@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Kirim WA Grup via Fonnte</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 480px;
+      margin: 20px auto;
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+    }
+    label { font-weight: 600; display:block; margin-bottom:4px; }
+    textarea, input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      margin-bottom: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #25d366;
+      color: white;
+      font-size: 15px;
+    }
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .log {
+      margin-top: 12px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      background: #f5f5f5;
+      padding: 8px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Kirim Pesan ke Grup WhatsApp (Fonnte)</h2>
+
+  <label for="target">ID Grup WhatsApp</label>
+  <input id="target" type="text" value="120363401341090123@g.us">
+
+  <label for="message">Pesan</label>
+  <textarea id="message" rows="4">Halo semua, ini pesan otomatis dari sistem 😊</textarea>
+
+  <button id="btnKirim">Kirim ke Grup</button>
+
+  <div class="log" id="log">Log akan tampil di sini…</div>
+
+  <script>
+    const url = "https://api.fonnte.com/send";
+    const token = "TOKEN_FONNTE_KAMU"; // <-- GANTI dengan token Fonnte kamu
+
+    const btn = document.getElementById("btnKirim");
+    const log = document.getElementById("log");
+
+    btn.addEventListener("click", async () => {
+      const target = document.getElementById("target").value.trim();
+      const message = document.getElementById("message").value.trim();
+
+      if (!target || !message) {
+        alert("Target dan pesan wajib diisi!");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Mengirim…";
+
+      const formData = new FormData();
+      formData.append("target", target);   // untuk grup pakai ID grup, mis: 120363401341090123@g.us
+      formData.append("message", message);
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Authorization": token
+          },
+          body: formData
+        });
+
+        const text = await response.text();
+        log.textContent = "Respon API:\n" + text;
+      } catch (err) {
+        log.textContent = "Error:\n" + err;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Kirim ke Grup";
+      }
+    });
+  </script>
+</body>
+</html>
