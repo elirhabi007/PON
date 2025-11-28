@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Camera + GPS + Watermark</title>
+  <title>Camera + GPS + Watermark Absensi</title>
   <style>
     body{
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
@@ -81,10 +81,9 @@
   </style>
 </head>
 <body>
-  <h1>Camera + GPS + Watermark</h1>
+  <h1>Camera + GPS + Watermark Absensi</h1>
   <p class="note">
-    - Izinkan akses <b>kamera</b> dan <b>lokasi</b>.<br>
-    - Hasil foto otomatis diberi watermark: nama, lokasi, tanggal & jam.
+    Watermark ala aplikasi absensi: kotak “Absensi + jam” di kiri bawah, dengan tanggal, alamat, dan kode foto.
   </p>
 
   <div class="stage">
@@ -133,16 +132,23 @@
     let currentDeviceId = null;
     let videoTracks = [];
 
-    // ===== KONFIGURASI WATERMARK =====
-    const WATERMARK_OWNER = "© Arief Computer"; // ganti nama toko / brand
-    const WATERMARK_FONT_MAIN = "20px system-ui";
-    const WATERMARK_FONT_SUB = "16px system-ui";
-    const WATERMARK_MARGIN = 16;
+    // ===== KONFIGURASI WATERMARK ABSENSI =====
+    const WM_MARGIN = 24;      // jarak dari tepi kiri & bawah
+    const WM_PADDING = 10;     // padding di sekitar teks utama
+    const WM_FONT_TITLE = "bold 18px system-ui";
+    const WM_FONT_TIME  = "bold 22px system-ui";
+    const WM_FONT_TEXT  = "14px system-ui";
+    const WM_FONT_CODE  = "12px system-ui";
 
     function formatTanggalIndo(date) {
+      const hari = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
       const pad = n => n.toString().padStart(2, '0');
-      return `${pad(date.getDate())}-${pad(date.getMonth()+1)}-${date.getFullYear()} ` +
-             `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+      const h = hari[date.getDay()];
+      return `${h}, ${pad(date.getDate())}/${pad(date.getMonth()+1)}/${date.getFullYear()}`;
+    }
+    function formatJam(date) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
     async function startCamera() {
@@ -168,7 +174,6 @@
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         handleStream(stream);
       } catch (err) {
-        // fallback: tanpa exact facingMode
         try {
           delete constraints.video.facingMode;
           stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -233,7 +238,6 @@
               "Longitude: " + lng + "\n" +
               "Akurasi : ~" + Math.round(acc) + " meter\n";
 
-            // reverse geocoding
             try {
               infoLokasi.textContent = baseInfo + "\nMencari nama kota (reverse geocoding)...";
 
@@ -241,7 +245,6 @@
               const res = await fetch(url, {
                 headers: {
                   "Accept": "application/json",
-                  // beberapa server minta User-Agent khusus, ini basic saja
                   "User-Agent": "camera-gps-watermark-demo"
                 }
               });
@@ -252,13 +255,15 @@
               const jalan = addr.road || "";
               const desa = addr.suburb || addr.hamlet || "";
               const kec = addr.state_district || addr.county || "";
+              const kodePos = addr.postcode || "";
 
               let alamatText =
                 (jalan ? jalan + ", " : "") +
                 (desa ? desa + ", " : "") +
                 (kota ? kota + ", " : "") +
                 (kec ? kec + ", " : "") +
-                negara;
+                (negara ? negara + ", " : "") +
+                (kodePos ? kodePos : "");
 
               baseInfo +=
                 "\nPerkiraan Kota : " + kota +
@@ -307,92 +312,149 @@
       });
     }
 
+    function generateFotoCode() {
+      // kode acak sederhana ala "3KMKNGU…"
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let code = "";
+      for (let i = 0; i < 12; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
     async function capturePhotoWithWatermark() {
       if (!video || video.readyState < 2) return;
 
-      // 1. ambil informasi lokasi dulu
       const lokasi = await getLocationInfo();
       const now = new Date();
-      const waktuStr = formatTanggalIndo(now);
+      const tanggalStr = formatTanggalIndo(now);
+      const jamStr = formatJam(now);
+      const kodeFoto = generateFotoCode();
 
-      // 2. siapkan text watermark
-      let lokasiStr = "";
-      if (lokasi && lokasi.lat && lokasi.lng) {
-        const lat = lokasi.lat.toFixed(6);
-        const lng = lokasi.lng.toFixed(6);
-        if (lokasi.kota) {
-          lokasiStr = `${lokasi.kota} (${lat}, ${lng})`;
-        } else {
-          lokasiStr = `(${lat}, ${lng})`;
-        }
-      } else {
-        lokasiStr = "Lokasi tidak tersedia";
-      }
+      // alamat untuk baris-baris bawah
+      const alamatStr = lokasi && lokasi.alamat
+        ? lokasi.alamat
+        : "Alamat tidak tersedia";
 
-      const baris1 = WATERMARK_OWNER;
-      const baris2 = lokasiStr;
-      const baris3 = waktuStr;
-
-      // 3. gambar dari video ke canvas
+      // canvas & gambar utama
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // 4. gambar watermark (tiga baris)
+      // ===== WATERMARK ALA APLIKASI ABSENSI (KIRI BAWAH) =====
       ctx.save();
 
-      // shadow supaya terlihat di background terang
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
+      const marginX = WM_MARGIN;
+      const marginY = WM_MARGIN;
 
-      // warna text (putih)
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      // ---- 1) Kotak "Absensi | JAM" ----
+      // hitung ukuran teks
+      ctx.font = WM_FONT_TITLE;
+      const labelText = "Absensi";
+      const labelWidth = ctx.measureText(labelText).width;
 
-      const xMargin = WATERMARK_MARGIN;
-      const yMargin = WATERMARK_MARGIN;
+      ctx.font = WM_FONT_TIME;
+      const timeText = jamStr;
+      const timeWidth = ctx.measureText(timeText).width;
 
-      // baris utama (nama)
-      ctx.font = WATERMARK_FONT_MAIN;
-      ctx.textBaseline = "bottom";
-      const text1Width = ctx.measureText(baris1).width;
+      const gapBetween = 8; // jarak antara kotak kuning dan biru
+      const boxHeight = 34;
 
-      // baris 2 & 3 (lebih kecil)
-      ctx.font = WATERMARK_FONT_SUB;
-      const text2Width = ctx.measureText(baris2).width;
-      const text3Width = ctx.measureText(baris3).width;
+      const box1Width = labelWidth + 20; // padding
+      const box2Width = timeWidth + 20;
 
-      const maxWidth = Math.max(text1Width, text2Width, text3Width);
+      const totalWidth = box1Width + gapBetween + box2Width;
 
-      // posisi: pojok kiri bawah
-      const x = xMargin;
-      // kita hitung tinggi 3 baris
-      const lineHeightMain = 24; // kira-kira
-      const lineHeightSub = 20;
-      const totalHeight = lineHeightMain + lineHeightSub * 2;
+      const boxY = canvas.height - marginY - boxHeight;
+      const box1X = marginX;
+      const box2X = marginX + box1Width + gapBetween;
 
-      let yBottom = canvas.height - yMargin;
+      // kotak kuning (Absensi)
+      ctx.fillStyle = "#FFB800"; // kuning
+      ctx.roundRect(box1X, boxY, box1Width, boxHeight, 6);
+      ctx.fill();
 
-      // baris 1
-      ctx.font = WATERMARK_FONT_MAIN;
-      ctx.fillText(baris1, x, yBottom);
-      // baris 2
-      ctx.font = WATERMARK_FONT_SUB;
-      ctx.fillText(baris2, x, yBottom - lineHeightMain);
-      // baris 3
-      ctx.fillText(baris3, x, yBottom - lineHeightMain - lineHeightSub);
+      // kotak biru (jam)
+      ctx.fillStyle = "#003C9F"; // biru tua
+      ctx.roundRect(box2X, boxY, box2Width, boxHeight, 6);
+      ctx.fill();
+
+      // teks "Absensi"
+      ctx.font = WM_FONT_TITLE;
+      ctx.fillStyle = "#1F1F1F";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelText, box1X + 10, boxY + boxHeight / 2);
+
+      // teks jam
+      ctx.font = WM_FONT_TIME;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(timeText, box2X + 10, boxY + boxHeight / 2);
+
+      // ---- 2) Teks tanggal dan alamat di bawahnya ----
+      const textStartX = marginX;
+      let textY = boxY - 8; // mulai tepat di atas kotak
+
+      // background hitam transparan di belakang teks (agar terbaca)
+      const textBlockPadding = 10;
+      const lines = [
+        tanggalStr,
+        alamatStr
+      ];
+
+      ctx.font = WM_FONT_TEXT;
+      let maxLineWidth = 0;
+      for (const line of lines) {
+        const w = ctx.measureText(line).width;
+        if (w > maxLineWidth) maxLineWidth = w;
+      }
+
+      const lineHeight = 18;
+      const blockHeight = lines.length * lineHeight + textBlockPadding * 2;
+      const blockWidth = maxLineWidth + textBlockPadding * 2;
+
+      const blockX = textStartX - 4;
+      const blockY = textY - blockHeight;
+
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.roundRect(blockX, blockY, blockWidth, blockHeight, 8);
+      ctx.fill();
+
+      // teks putih
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textBaseline = "top";
+      let curY = blockY + textBlockPadding;
+      for (const line of lines) {
+        ctx.fillText(line, blockX + textBlockPadding, curY);
+        curY += lineHeight;
+      }
+
+      // ---- 3) Kode foto abu-abu di bawah (kecil) ----
+      const kodeLabel = "Kode Foto: " + kodeFoto;
+      ctx.font = WM_FONT_CODE;
+      const kodeWidth = ctx.measureText(kodeLabel).width;
+      const kodeHeight = 16;
+
+      const kodeX = marginX;
+      const kodeY = boxY + boxHeight + 6;
+
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.roundRect(kodeX - 4, kodeY - 2, kodeWidth + 8, kodeHeight + 6, 6);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(220,220,220,0.9)";
+      ctx.textBaseline = "top";
+      ctx.fillText(kodeLabel, kodeX, kodeY);
 
       ctx.restore();
+      // ===== END WATERMARK =====
 
-      // 5. export sebagai data URL
       const dataUrl = canvas.toDataURL('image/png');
       photoImg.src = dataUrl;
 
       downloadBtn.href = dataUrl;
-      downloadBtn.download = `photo-${now.toISOString().replace(/[:.]/g,'-')}.png`;
+      downloadBtn.download = `absensi-${now.toISOString().replace(/[:.]/g,'-')}.png`;
       downloadBtn.disabled = false;
       canvas.style.display = 'block';
     }
@@ -413,6 +475,29 @@
         console.error(err);
         alert('Gagal mengganti kamera.');
       }
+    }
+
+    // Polyfill roundRect kalau belum ada
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function (x, y, width, height, radius) {
+        if (typeof radius === "number") {
+          radius = { tl: radius, tr: radius, br: radius, bl: radius };
+        } else {
+          radius = Object.assign({ tl: 0, tr: 0, br: 0, bl: 0 }, radius);
+        }
+        this.beginPath();
+        this.moveTo(x + radius.tl, y);
+        this.lineTo(x + width - radius.tr, y);
+        this.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+        this.lineTo(x + width, y + height - radius.br);
+        this.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+        this.lineTo(x + radius.bl, y + height);
+        this.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+        this.lineTo(x, y + radius.tl);
+        this.quadraticCurveTo(x, y, x + radius.tl, y);
+        this.closePath();
+        return this;
+      };
     }
 
     // ===== EVENT LISTENERS =====
