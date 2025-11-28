@@ -3,47 +3,117 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Camera Capture — Ambil Foto</title>
+  <title>Camera + GPS + Watermark</title>
   <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;color:#111;display:flex;flex-direction:column;gap:12px;align-items:center;padding:18px}
-    .stage{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    video{border-radius:8px;max-width:100%;width:360px;background:#000}
-    canvas{display:block;border-radius:8px;width:360px}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    button,select{padding:8px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .thumb{max-width:160px;border-radius:8px}
-    .note{font-size:13px;color:#555}
+    body{
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+      color:#111;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      align-items:center;
+      padding:18px;
+      max-width:900px;
+      margin:0 auto;
+    }
+    .stage{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      justify-content:center;
+      width:100%;
+    }
+    video{
+      border-radius:8px;
+      max-width:100%;
+      width:360px;
+      background:#000;
+    }
+    canvas{
+      display:block;
+      border-radius:8px;
+      width:360px;
+      max-width:100%;
+    }
+    .controls{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin-top:8px;
+    }
+    button,select{
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid #ccc;
+      background:#fff;
+      cursor:pointer;
+      font-size:14px;
+    }
+    button:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+    }
+    .thumb{
+      max-width:200px;
+      border-radius:8px;
+    }
+    .note{
+      font-size:13px;
+      color:#555;
+      text-align:center;
+    }
+    pre{
+      background:#f5f5f5;
+      padding:10px;
+      border-radius:8px;
+      white-space:pre-wrap;
+      font-size:12px;
+      max-width:100%;
+      overflow:auto;
+    }
+    h1{
+      font-size:20px;
+      text-align:center;
+      margin-bottom:4px;
+    }
   </style>
 </head>
 <body>
-  <h1>Camera Capture — Ambil Foto</h1>
-  <p class="note">Izinkan akses kamera saat diminta. Cocok di desktop & mobile (browser modern).</p>
+  <h1>Camera + GPS + Watermark</h1>
+  <p class="note">
+    - Izinkan akses <b>kamera</b> dan <b>lokasi</b>.<br>
+    - Hasil foto otomatis diberi watermark: nama, lokasi, tanggal & jam.
+  </p>
 
   <div class="stage">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas" style="display:none"></canvas>
-  </div>
+    <div>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div class="controls">
+        <button id="startBtn">Mulai Kamera</button>
+        <button id="stopBtn" disabled>Berhenti</button>
+        <button id="captureBtn" disabled>Ambil Foto</button>
 
-  <div class="controls">
-    <button id="startBtn">Mulai Kamera</button>
-    <button id="stopBtn" disabled>Berhenti</button>
-    <button id="captureBtn" disabled>Ambil Foto</button>
+        <label for="facing">Kamera:</label>
+        <select id="facing">
+          <option value="user">Depan (user)</option>
+          <option value="environment">Belakang (environment)</option>
+          <option value="auto" selected>Auto</option>
+        </select>
 
-    <label for="facing">Kamera:</label>
-    <select id="facing">
-      <option value="user">Depan (user)</option>
-      <option value="environment">Belakang (environment)</option>
-      <option value="auto" selected>Auto</option>
-    </select>
+        <button id="flipBtn" title="Ganti kamera (jika tersedia)">Ganti Kamera</button>
+        <button id="downloadBtn" disabled>Download Foto</button>
+      </div>
+    </div>
 
-    <button id="downloadBtn" disabled>Download Foto</button>
-    <button id="flipBtn" title="Ganti kamera (jika tersedia)">Ganti Kamera</button>
-  </div>
-
-  <div id="output">
-    <h3>Preview</h3>
-    <img id="photo" class="thumb" alt="Foto preview" />
+    <div>
+      <h3>Preview Foto</h3>
+      <img id="photo" class="thumb" alt="Foto preview" />
+      <h3>Info Lokasi</h3>
+      <pre id="infoLokasi">Belum ada data lokasi.</pre>
+    </div>
   </div>
 
   <script>
@@ -56,11 +126,24 @@
     const flipBtn = document.getElementById('flipBtn');
     const facingSelect = document.getElementById('facing');
     const photoImg = document.getElementById('photo');
+    const infoLokasi = document.getElementById('infoLokasi');
 
     let stream = null;
     let currentFacingMode = 'auto';
     let currentDeviceId = null;
     let videoTracks = [];
+
+    // ===== KONFIGURASI WATERMARK =====
+    const WATERMARK_OWNER = "© Arief Computer"; // ganti nama toko / brand
+    const WATERMARK_FONT_MAIN = "20px system-ui";
+    const WATERMARK_FONT_SUB = "16px system-ui";
+    const WATERMARK_MARGIN = 16;
+
+    function formatTanggalIndo(date) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${pad(date.getDate())}-${pad(date.getMonth()+1)}-${date.getFullYear()} ` +
+             `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
 
     async function startCamera() {
       stopCamera();
@@ -85,7 +168,7 @@
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         handleStream(stream);
       } catch (err) {
-        // fallback: try without exact facingMode
+        // fallback: tanpa exact facingMode
         try {
           delete constraints.video.facingMode;
           stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -105,8 +188,10 @@
       stopBtn.disabled = false;
       captureBtn.disabled = false;
       downloadBtn.disabled = true;
-      // store device id of first track
-      if (videoTracks.length) currentDeviceId = videoTracks[0].getSettings().deviceId || currentDeviceId;
+      if (videoTracks.length) {
+        const settings = videoTracks[0].getSettings();
+        currentDeviceId = settings.deviceId || currentDeviceId;
+      }
     }
 
     function stopCamera() {
@@ -120,28 +205,205 @@
       captureBtn.disabled = true;
     }
 
-    function capturePhoto() {
+    // ===== AMBIL GPS + REVERSE GEOCODING =====
+    function getLocationInfo() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({
+            success: false,
+            message: "Browser tidak mendukung Geolocation.",
+            lat: null,
+            lng: null,
+            kota: null,
+            alamat: null
+          });
+          return;
+        }
+
+        infoLokasi.textContent = "Mengambil lokasi GPS...";
+
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            let baseInfo =
+              "Latitude : " + lat + "\n" +
+              "Longitude: " + lng + "\n" +
+              "Akurasi : ~" + Math.round(acc) + " meter\n";
+
+            // reverse geocoding
+            try {
+              infoLokasi.textContent = baseInfo + "\nMencari nama kota (reverse geocoding)...";
+
+              const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+              const res = await fetch(url, {
+                headers: {
+                  "Accept": "application/json",
+                  // beberapa server minta User-Agent khusus, ini basic saja
+                  "User-Agent": "camera-gps-watermark-demo"
+                }
+              });
+              const data = await res.json();
+              const addr = data.address || {};
+              const kota = addr.city || addr.town || addr.village || addr.county || "Tidak diketahui";
+              const negara = addr.country || "";
+              const jalan = addr.road || "";
+              const desa = addr.suburb || addr.hamlet || "";
+              const kec = addr.state_district || addr.county || "";
+
+              let alamatText =
+                (jalan ? jalan + ", " : "") +
+                (desa ? desa + ", " : "") +
+                (kota ? kota + ", " : "") +
+                (kec ? kec + ", " : "") +
+                negara;
+
+              baseInfo +=
+                "\nPerkiraan Kota : " + kota +
+                "\nAlamat Singkat : " + alamatText;
+
+              infoLokasi.textContent = baseInfo;
+
+              resolve({
+                success: true,
+                message: "OK",
+                lat,
+                lng,
+                kota,
+                alamat: alamatText
+              });
+            } catch (e) {
+              baseInfo += "\n\nGagal mengambil nama kota dari server: " + e.message;
+              infoLokasi.textContent = baseInfo;
+              resolve({
+                success: true,
+                message: "GPS OK, reverse geocoding gagal",
+                lat,
+                lng,
+                kota: null,
+                alamat: null
+              });
+            }
+          },
+          (err) => {
+            infoLokasi.textContent = "Gagal mengambil lokasi: " + err.message;
+            resolve({
+              success: false,
+              message: err.message,
+              lat: null,
+              lng: null,
+              kota: null,
+              alamat: null
+            });
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    async function capturePhotoWithWatermark() {
       if (!video || video.readyState < 2) return;
-      // set canvas size same as video
+
+      // 1. ambil informasi lokasi dulu
+      const lokasi = await getLocationInfo();
+      const now = new Date();
+      const waktuStr = formatTanggalIndo(now);
+
+      // 2. siapkan text watermark
+      let lokasiStr = "";
+      if (lokasi && lokasi.lat && lokasi.lng) {
+        const lat = lokasi.lat.toFixed(6);
+        const lng = lokasi.lng.toFixed(6);
+        if (lokasi.kota) {
+          lokasiStr = `${lokasi.kota} (${lat}, ${lng})`;
+        } else {
+          lokasiStr = `(${lat}, ${lng})`;
+        }
+      } else {
+        lokasiStr = "Lokasi tidak tersedia";
+      }
+
+      const baris1 = WATERMARK_OWNER;
+      const baris2 = lokasiStr;
+      const baris3 = waktuStr;
+
+      // 3. gambar dari video ke canvas
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
+
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // 4. gambar watermark (tiga baris)
+      ctx.save();
+
+      // shadow supaya terlihat di background terang
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+
+      // warna text (putih)
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+
+      const xMargin = WATERMARK_MARGIN;
+      const yMargin = WATERMARK_MARGIN;
+
+      // baris utama (nama)
+      ctx.font = WATERMARK_FONT_MAIN;
+      ctx.textBaseline = "bottom";
+      const text1Width = ctx.measureText(baris1).width;
+
+      // baris 2 & 3 (lebih kecil)
+      ctx.font = WATERMARK_FONT_SUB;
+      const text2Width = ctx.measureText(baris2).width;
+      const text3Width = ctx.measureText(baris3).width;
+
+      const maxWidth = Math.max(text1Width, text2Width, text3Width);
+
+      // posisi: pojok kiri bawah
+      const x = xMargin;
+      // kita hitung tinggi 3 baris
+      const lineHeightMain = 24; // kira-kira
+      const lineHeightSub = 20;
+      const totalHeight = lineHeightMain + lineHeightSub * 2;
+
+      let yBottom = canvas.height - yMargin;
+
+      // baris 1
+      ctx.font = WATERMARK_FONT_MAIN;
+      ctx.fillText(baris1, x, yBottom);
+      // baris 2
+      ctx.font = WATERMARK_FONT_SUB;
+      ctx.fillText(baris2, x, yBottom - lineHeightMain);
+      // baris 3
+      ctx.fillText(baris3, x, yBottom - lineHeightMain - lineHeightSub);
+
+      ctx.restore();
+
+      // 5. export sebagai data URL
       const dataUrl = canvas.toDataURL('image/png');
       photoImg.src = dataUrl;
+
       downloadBtn.href = dataUrl;
-      downloadBtn.download = `photo-${new Date().toISOString().replace(/[:.]/g,'-')}.png`;
+      downloadBtn.download = `photo-${now.toISOString().replace(/[:.]/g,'-')}.png`;
       downloadBtn.disabled = false;
       canvas.style.display = 'block';
     }
 
     async function flipCamera() {
-      // try enumerate devices and pick a different video device
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        if (videoDevices.length < 2) return alert('Tidak ada kamera lain yang terdeteksi.');
-        // find index of current device
+        if (videoDevices.length < 2) {
+          return alert('Tidak ada kamera lain yang terdeteksi.');
+        }
         const idx = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
         const next = videoDevices[(idx + 1) % videoDevices.length];
         currentDeviceId = next.deviceId;
@@ -153,31 +415,26 @@
       }
     }
 
+    // ===== EVENT LISTENERS =====
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
-    captureBtn.addEventListener('click', capturePhoto);
+    captureBtn.addEventListener('click', capturePhotoWithWatermark);
     flipBtn.addEventListener('click', flipCamera);
 
-    // allow pressing space to capture when video focused
     video.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') capturePhoto();
+      if (e.code === 'Space') capturePhotoWithWatermark();
     });
 
-    // set download link action
     downloadBtn.addEventListener('click', (e) => {
       if (!photoImg.src) e.preventDefault();
     });
 
-    // on page unload stop camera
     window.addEventListener('pagehide', stopCamera);
 
-    // try set initial facing from select
     facingSelect.addEventListener('change', () => {
-      // restart camera automatically if running
       if (stream) startCamera();
     });
 
-    // helpful: if browser supports getUserMedia constraints, try to pre-select facing
     (async function precheck(){
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
       try{
