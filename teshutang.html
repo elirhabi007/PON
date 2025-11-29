@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Catatan Hutang dari Google Sheets (Publish to Web CSV)</title>
+  <title>Catatan Hutang & Cicilan</title>
   <style>
     body{
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -14,30 +14,84 @@
       color:#111827;
     }
     h1{font-size:1.6rem;margin-bottom:4px}
-    h2{font-size:1.1rem;margin:18px 0 6px}
+    h2{font-size:1.1rem;margin:0 0 6px}
     .small{font-size:0.9rem;color:#4b5563}
+    .muted{color:#6b7280}
     table{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.9rem;background:white}
     th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}
     th{background:#e5e7eb}
     code{background:#e5e7eb;padding:2px 4px;border-radius:4px;font-size:0.8rem}
-    .badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:0.75rem}
-    .badge-sisa{background:#fee2e2;color:#b91c1c}
-    .badge-lunas{background:#dcfce7;color:#15803d}
-    .wrap{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px}
-    .card{background:white;border-radius:8px;padding:12px;border:1px solid #e5e7eb}
-    .muted{color:#6b7280}
-    .num{font-weight:600}
+    .wrap{
+      display:grid;
+      grid-template-columns:2fr 1fr;
+      gap:16px;
+      margin-top:16px;
+    }
+    .card{
+      background:white;
+      border-radius:8px;
+      padding:12px;
+      border:1px solid #e5e7eb;
+      box-shadow:0 1px 2px rgba(0,0,0,0.04);
+      margin-bottom:10px;
+    }
+    .stat-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+      margin-top:6px;
+    }
+    .stat-item{
+      padding:8px 10px;
+      border-radius:8px;
+      background:#f9fafb;
+      border:1px solid #e5e7eb;
+    }
+    .stat-label{
+      font-size:0.8rem;
+      color:#6b7280;
+      margin-bottom:2px;
+    }
+    .stat-value{
+      font-size:1.1rem;
+      font-weight:600;
+    }
+    .stat-sisa{
+      color:#b91c1c;
+    }
+    .progress-wrap{
+      margin-top:10px;
+    }
+    .progress-bar{
+      width:100%;
+      height:10px;
+      border-radius:999px;
+      background:#e5e7eb;
+      overflow:hidden;
+    }
+    .progress-fill{
+      height:100%;
+      width:0%;
+      background:#22c55e;
+      transition:width .3s;
+    }
+    .progress-text{
+      font-size:0.8rem;
+      color:#4b5563;
+      margin-top:4px;
+    }
     @media(max-width:900px){
       .wrap{grid-template-columns:1fr}
     }
   </style>
 </head>
 <body>
-  <h1>Catatan Hutang</h1>
+  <h1>Catatan Hutang & Cicilan</h1>
   <p class="small">
-    Data diambil dari 2 sheet Google Sheets yang di-publish sebagai CSV:<br>
-    <strong>DataHutang</strong> dan <strong>CicilanHutang</strong>.  
-    Kolom: <code>timestamp | Tanggal | Barang | Photo | Harga Barang</code> (Tanggal boleh dikosongkan, tidak ditampilkan di HTML).
+    Model cicilan: <strong>bayar berdasarkan nominal, bukan per barang</strong>.<br>
+    Total hutang = jumlah semua harga barang yang pernah diambil (sheet <code>DataHutang</code>).<br>
+    Total cicilan = jumlah semua pembayaran cicilan (sheet <code>CicilanHutang</code>).<br>
+    Sisa hutang = Total hutang - Total cicilan.
   </p>
 
   <div id="status" class="small">Status: menyiapkan fetch...</div>
@@ -45,46 +99,68 @@
   <div class="wrap">
     <div>
       <div class="card">
-        <h2>Ringkasan per Barang</h2>
-        <p class="small muted">Menggabungkan DataHutang dan CicilanHutang, lalu menghitung sisa hutang.</p>
-        <div id="summaryWrap">Menunggu data...</div>
-      </div>
-
-      <div class="card">
-        <h2>DataHutang (semua hutang)</h2>
+        <h2>Riwayat Barang Diambil (DataHutang)</h2>
+        <p class="small muted">Setiap baris adalah satu barang yang diambil.</p>
         <div id="hutangWrap">Menunggu data...</div>
       </div>
 
       <div class="card">
-        <h2>CicilanHutang (semua cicilan)</h2>
+        <h2>Riwayat Cicilan (CicilanHutang)</h2>
+        <p class="small muted">Setiap baris adalah satu transaksi pembayaran cicilan.</p>
         <div id="cicilanWrap">Menunggu data...</div>
       </div>
     </div>
 
     <div>
       <div class="card">
-        <h2>Statistik</h2>
-        <p class="small muted">Total nilai hutang, total cicilan, dan sisa keseluruhan.</p>
-        <table>
-          <tbody>
-            <tr><th>Total Hutang Awal</th><td id="totalHutang">-</td></tr>
-            <tr><th>Total Cicilan</th><td id="totalCicilan">-</td></tr>
-            <tr><th>Total Sisa Hutang</th><td id="totalSisa">-</td></tr>
-          </tbody>
-        </table>
+        <h2>Ringkasan Hutang</h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-label">Total Nilai Barang (Hutang Awal)</div>
+            <div id="totalHutang" class="stat-value">-</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Total Cicilan Dibayar</div>
+            <div id="totalCicilan" class="stat-value">-</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Sisa Hutang</div>
+            <div id="totalSisa" class="stat-value stat-sisa">-</div>
+          </div>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="stat-label">Progress Pelunasan</div>
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <div id="progressText" class="progress-text">-</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Panduan</h2>
+        <ol class="small muted">
+          <li>Sheet <code>DataHutang</code>:
+            <br>Header: <code>timestamp | Tanggal | Barang | Photo | Harga Barang</code>.
+          </li>
+          <li>Sheet <code>CicilanHutang</code>:
+            <br>Header: <code>timestamp | Tanggal | Keterangan | Nominal Cicilan</code>.
+          </li>
+          <li>Di Google Sheets: <em>File → Share → Publish to web → format CSV</em> untuk kedua sheet.</li>
+          <li>Copy URL CSV masing-masing sheet ke variabel <code>CSV_URL_HUTANG</code> dan <code>CSV_URL_CICILAN</code> di bawah.</li>
+        </ol>
       </div>
     </div>
   </div>
 
 <script>
 // =============== KONFIGURASI: GANTI DENGAN URL CSV PUBLISH-TO-WEB KAMU =================
-// URL ini CONTOH dari sheet utama; nanti kamu ganti 2 baris ini:
-// 1. CSV_URL_HUTANG    -> publish CSV untuk sheet "DataHutang"
-// 2. CSV_URL_CICILAN   -> publish CSV untuk sheet "CicilanHutang"
+// CSV_URL_HUTANG  -> URL CSV hasil publish untuk sheet "DataHutang"
+// CSV_URL_CICILAN -> URL CSV hasil publish untuk sheet "CicilanHutang"
 
-// GANTI SESUAI punyamu:
+// CONTOH: sekarang masih pakai URL yang sama; ganti dengan URL aslimu
 const CSV_URL_HUTANG  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
-// misal setelah publish sheet CicilanHutang, kamu dapat URL lain, taruh di sini:
 const CSV_URL_CICILAN = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
 // =======================================================================================
 
@@ -96,16 +172,15 @@ async function fetchCsv(url){
   return csvToArray(text);
 }
 
-// Parser CSV sederhana
+// Parser CSV sederhana (tanpa koma di dalam sel)
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
-    // split by koma, hapus tanda kutip depan-belakang jika ada
     return row.split(",").map(v => v.replace(/^"|"$/g,""));
   });
 }
 
-// Konversi array CSV ke objek sesuai header
+// Ubah array CSV menjadi array objek berdasarkan header
 function csvToObjects(data){
   if(!data || data.length === 0) return [];
   const [header, ...rows] = data;
@@ -121,7 +196,6 @@ function csvToObjects(data){
   return objs;
 }
 
-// Helper HTML escape
 function escapeHtml(s){
   return String(s)
     .replace(/&/g,"&amp;")
@@ -143,15 +217,13 @@ function parseHarga(x){
 function buildTableHTMLFromObjects(objs, columns){
   if(!objs || objs.length === 0) return "<div class='small muted'>Tidak ada data.</div>";
   let html = "<table><thead><tr>";
-  columns.forEach(col => {
-    html += "<th>"+escapeHtml(col.label)+"</th>";
-  });
+  columns.forEach(col => html += "<th>"+escapeHtml(col.label)+"</th>");
   html += "</tr></thead><tbody>";
   objs.forEach(o => {
     html += "<tr>";
     columns.forEach(col => {
       let v = o[col.key] ?? "";
-      if(col.key === "HargaBarang"){
+      if(col.type === "harga"){
         v = formatRupiah(parseHarga(v));
       }
       html += "<td>"+escapeHtml(v)+"</td>";
@@ -163,13 +235,17 @@ function buildTableHTMLFromObjects(objs, columns){
 }
 
 (async function main(){
-  const statusEl   = document.getElementById("status");
-  const hutangWrap = document.getElementById("hutangWrap");
-  const cicilanWrap= document.getElementById("cicilanWrap");
-  const summaryWrap= document.getElementById("summaryWrap");
+  const statusEl    = document.getElementById("status");
+  const hutangWrap  = document.getElementById("hutangWrap");
+  const cicilanWrap = document.getElementById("cicilanWrap");
+  const totalHutangEl  = document.getElementById("totalHutang");
+  const totalCicilanEl = document.getElementById("totalCicilan");
+  const totalSisaEl    = document.getElementById("totalSisa");
+  const progressFill   = document.getElementById("progressFill");
+  const progressText   = document.getElementById("progressText");
 
   try{
-    statusEl.textContent = "Status: mengambil DataHutang dan CicilanHutang dari Google Sheets...";
+    statusEl.textContent = "Status: mengambil data dari kedua sheet...";
 
     const [csvHutang, csvCicilan] = await Promise.all([
       fetchCsv(CSV_URL_HUTANG),
@@ -179,93 +255,60 @@ function buildTableHTMLFromObjects(objs, columns){
     const hutangObjs  = csvToObjects(csvHutang);
     const cicilanObjs = csvToObjects(csvCicilan);
 
-    // Tampilkan tabel mentah (tanpa kolom Tanggal)
-    hutangWrap.innerHTML  = buildTableHTMLFromObjects(hutangObjs, [
+    // Tabel barang diambil (DataHutang)
+    hutangWrap.innerHTML = buildTableHTMLFromObjects(hutangObjs, [
       {key:"timestamp",    label:"timestamp"},
       {key:"Barang",       label:"Barang"},
       {key:"Photo",        label:"Photo"},
-      {key:"Harga Barang", label:"Harga Barang"}
+      {key:"Harga Barang", label:"Harga Barang", type:"harga"}
+      // Kolom Tanggal tidak ditampilkan
     ]);
 
+    // Tabel cicilan (CicilanHutang)
     cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanObjs, [
-      {key:"timestamp",    label:"timestamp"},
-      {key:"Barang",       label:"Barang"},
-      {key:"Photo",        label:"Photo"},
-      {key:"Harga Barang", label:"Harga Barang"}
+      {key:"timestamp",       label:"timestamp"},
+      {key:"Keterangan",      label:"Keterangan"},
+      {key:"Nominal Cicilan", label:"Nominal Cicilan", type:"harga"}
+      // Kolom Tanggal tidak ditampilkan
     ]);
 
-    // ====== HITUNG RINGKASAN PER BARANG ======
-    const map = new Map(); // key: nama barang
+    // Hitung total hutang = sum(Harga Barang) dari DataHutang
+    const totalHutang = hutangObjs.reduce((sum,row) => {
+      return sum + parseHarga(row["Harga Barang"]);
+    }, 0);
 
-    // Dari DataHutang (hutang awal)
-    hutangObjs.forEach(r => {
-      const nama = (r["Barang"] || "UNKNOWN").trim();
-      const harga = parseHarga(r["Harga Barang"]);
-      const photo = r["Photo"] || "";
-      if(!map.has(nama)) map.set(nama, {Barang:nama, Hutang:0, Cicilan:0, Photo:photo});
-      const e = map.get(nama);
-      e.Hutang += harga;
-      if(!e.Photo && photo) e.Photo = photo;
-    });
+    // Hitung total cicilan = sum(Nominal Cicilan) dari CicilanHutang
+    const totalCicilan = cicilanObjs.reduce((sum,row) => {
+      return sum + parseHarga(row["Nominal Cicilan"]);
+    }, 0);
 
-    // Dari CicilanHutang (cicilan)
-    cicilanObjs.forEach(r => {
-      const nama = (r["Barang"] || "UNKNOWN").trim();
-      const cicil = parseHarga(r["Harga Barang"]);
-      const photo = r["Photo"] || "";
-      if(!map.has(nama)) map.set(nama, {Barang:nama, Hutang:0, Cicilan:0, Photo:photo});
-      const e = map.get(nama);
-      e.Cicilan += cicil;
-      if(!e.Photo && photo) e.Photo = photo;
-    });
+    // Sisa hutang
+    const totalSisa = Math.max(0, totalHutang - totalCicilan);
 
-    const summary = [];
-    for(const [k,v] of map){
-      const sisa = Math.max(0, v.Hutang - v.Cicilan);
-      summary.push({
-        Barang: v.Barang,
-        Photo: v.Photo,
-        Hutang: v.Hutang,
-        Cicilan: v.Cicilan,
-        Sisa: sisa
-      });
+    totalHutangEl.textContent  = "Rp " + formatRupiah(totalHutang);
+    totalCicilanEl.textContent = "Rp " + formatRupiah(totalCicilan);
+    totalSisaEl.textContent    = "Rp " + formatRupiah(totalSisa);
+
+    // Progress pelunasan
+    let progress = 0;
+    if(totalHutang > 0){
+      progress = Math.min(100, (totalCicilan / totalHutang) * 100);
     }
+    progressFill.style.width = progress.toFixed(0) + "%";
+    progressText.textContent = totalHutang > 0
+      ? progress.toFixed(1) + "% hutang sudah dibayar"
+      : "Belum ada data hutang";
 
-    // Sort alfabetis
-    summary.sort((a,b) => a.Barang.localeCompare(b.Barang));
-
-    // Build tabel ringkasan
-    let html = "<table><thead><tr><th>Barang</th><th>Hutang</th><th>Cicilan</th><th>Sisa</th></tr></thead><tbody>";
-    summary.forEach(r => {
-      html += "<tr>";
-      html += "<td>"+escapeHtml(r.Barang)+"</td>";
-      html += "<td>"+formatRupiah(r.Hutang)+"</td>";
-      html += "<td>"+formatRupiah(r.Cicilan)+"</td>";
-      if(r.Sisa>0){
-        html += "<td><span class='badge badge-sisa'>"+formatRupiah(r.Sisa)+"</span></td>";
-      } else {
-        html += "<td><span class='badge badge-lunas'>Lunas</span></td>";
-      }
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-    summaryWrap.innerHTML = html;
-
-    // Statistik total
-    const totalHutang = summary.reduce((s,r)=>s + r.Hutang,0);
-    const totalCicilan= summary.reduce((s,r)=>s + r.Cicilan,0);
-    const totalSisa   = summary.reduce((s,r)=>s + r.Sisa,0);
-    document.getElementById("totalHutang").textContent  = formatRupiah(totalHutang);
-    document.getElementById("totalCicilan").textContent = formatRupiah(totalCicilan);
-    document.getElementById("totalSisa").textContent    = formatRupiah(totalSisa);
-
-    statusEl.textContent = "Status: data berhasil diambil dari kedua sheet.";
+    statusEl.textContent = "Status: data berhasil diambil dan dihitung.";
   }catch(err){
     console.error(err);
     statusEl.textContent = "Status: error - " + err.message;
-    hutangWrap.textContent   = "Gagal mengambil data.";
-    cicilanWrap.textContent  = "Gagal mengambil data.";
-    summaryWrap.textContent  = "Gagal menghitung ringkasan.";
+    hutangWrap.textContent  = "Gagal mengambil data.";
+    cicilanWrap.textContent = "Gagal mengambil data.";
+    totalHutangEl.textContent  = "-";
+    totalCicilanEl.textContent = "-";
+    totalSisaEl.textContent    = "-";
+    progressText.textContent   = "Gagal menghitung progress.";
   }
 })();
 </script>
