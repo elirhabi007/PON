@@ -20,7 +20,6 @@
     table{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.9rem;background:white}
     th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}
     th{background:#e5e7eb}
-    code{background:#e5e7eb;padding:2px 4px;border-radius:4px;font-size:0.8rem}
     .wrap{
       display:grid;
       grid-template-columns:2fr 1fr;
@@ -63,7 +62,8 @@
       margin-top:10px;
     }
     .progress-bar{
-      width:100%;
+      width:70%;        /* dipendekkan */
+      max-width:260px;  /* batasi supaya tidak terlalu panjang di layar lebar */
       height:10px;
       border-radius:999px;
       background:#e5e7eb;
@@ -82,6 +82,7 @@
     }
     @media(max-width:900px){
       .wrap{grid-template-columns:1fr}
+      .progress-bar{width:100%;max-width:none;}
     }
   </style>
 </head>
@@ -137,21 +138,6 @@
           <div id="progressText" class="progress-text">-</div>
         </div>
       </div>
-
-      <div class="card">
-        <h2>Panduan</h2>
-        <ol class="small muted">
-          <li>Sheet <code>DataHutang</code>:
-            <br>Header: <code>timestamp | Tanggal | Barang | Photo | Harga Barang</code>.
-          </li>
-          <li>Sheet <code>CicilanHutang</code>:
-            <br>Header: <code>timestamp | Tanggal | Total pembayaran | Photo</code>.
-          </li>
-          <li>File ini membaca data dari dokumen:
-            <br><code>2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj</code>.
-          </li>
-        </ol>
-      </div>
     </div>
   </div>
 
@@ -162,13 +148,12 @@
 const CSV_URL_HUTANG  =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
 
-// CicilanHutang (dari screenshot: gid=1090039187)
+// CicilanHutang (gid dari tab CicilanHutang)
 const CSV_URL_CICILAN =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
 
 // ================================================================
 
-// Ambil CSV & parse ke array
 async function fetchCsv(url){
   const res = await fetch(url);
   if(!res.ok) throw new Error("Gagal fetch: " + res.status);
@@ -176,7 +161,6 @@ async function fetchCsv(url){
   return csvToArray(text);
 }
 
-// Parser CSV sederhana
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
@@ -184,7 +168,6 @@ function csvToArray(str){
   });
 }
 
-// Ubah array CSV menjadi array objek berdasarkan header
 function csvToObjects(data){
   if(!data || data.length === 0) return [];
   const [header, ...rows] = data;
@@ -259,41 +242,33 @@ function buildTableHTMLFromObjects(objs, columns){
     const hutangObjs  = csvToObjects(csvHutang);
     const cicilanObjs = csvToObjects(csvCicilan);
 
-    // Tabel barang diambil (DataHutang)
     hutangWrap.innerHTML = buildTableHTMLFromObjects(hutangObjs, [
       {key:"timestamp",    label:"timestamp"},
       {key:"Barang",       label:"Barang"},
       {key:"Photo",        label:"Photo"},
       {key:"Harga Barang", label:"Harga Barang", type:"harga"}
-      // Kolom Tanggal tidak ditampilkan
     ]);
 
-    // Tabel cicilan (CicilanHutang) - pakai "Total pembayaran" + Photo
     cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanObjs, [
       {key:"timestamp",         label:"timestamp"},
       {key:"Total pembayaran",  label:"Total pembayaran", type:"harga"},
       {key:"Photo",             label:"Photo"}
-      // Kolom Tanggal tidak ditampilkan
     ]);
 
-    // Hitung total hutang = sum(Harga Barang) dari DataHutang
     const totalHutang = hutangObjs.reduce((sum,row) => {
       return sum + parseHarga(row["Harga Barang"]);
     }, 0);
 
-    // Hitung total cicilan = sum(Total pembayaran) dari CicilanHutang
     const totalCicilan = cicilanObjs.reduce((sum,row) => {
       return sum + parseHarga(row["Total pembayaran"]);
     }, 0);
 
-    // Sisa hutang
     const totalSisa = Math.max(0, totalHutang - totalCicilan);
 
     totalHutangEl.textContent  = "Rp " + formatRupiah(totalHutang);
     totalCicilanEl.textContent = "Rp " + formatRupiah(totalCicilan);
     totalSisaEl.textContent    = "Rp " + formatRupiah(totalSisa);
 
-    // Progress pelunasan
     let progress = 0;
     if(totalHutang > 0){
       progress = Math.min(100, (totalCicilan / totalHutang) * 100);
