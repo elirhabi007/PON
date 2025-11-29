@@ -90,7 +90,7 @@
   <p class="small">
     Model cicilan: <strong>bayar berdasarkan nominal, bukan per barang</strong>.<br>
     Total hutang = jumlah semua harga barang yang pernah diambil (sheet <code>DataHutang</code>).<br>
-    Total cicilan = jumlah semua total pembayaran (sheet <code>CicilanHutang</code>).<br>
+    Total cicilan = jumlah semua <code>Total pembayaran</code> (sheet <code>CicilanHutang</code>).<br>
     Sisa hutang = Total hutang - Total cicilan.
   </p>
 
@@ -147,22 +147,26 @@
           <li>Sheet <code>CicilanHutang</code>:
             <br>Header: <code>timestamp | Tanggal | Total pembayaran | Photo</code>.
           </li>
-          <li>Di Google Sheets: <em>File → Share → Publish to web → format CSV</em> untuk kedua sheet.</li>
-          <li>Copy URL CSV masing-masing sheet ke variabel <code>CSV_URL_HUTANG</code> dan <code>CSV_URL_CICILAN</code> di bawah.</li>
+          <li>File ini membaca data dari dokumen:
+            <br><code>2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj</code>.
+          </li>
         </ol>
       </div>
     </div>
   </div>
 
 <script>
-// =============== KONFIGURASI: GANTI DENGAN URL CSV PUBLISH-TO-WEB KAMU =================
-// CSV_URL_HUTANG  -> URL CSV hasil publish untuk sheet "DataHutang"
-// CSV_URL_CICILAN -> URL CSV hasil publish untuk sheet "CicilanHutang"
+// =============== URL CSV FIX SESUAI DOKUMEN KAMU =================
 
-const CSV_URL_HUTANG  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
-// GANTI dengan URL CSV asli dari sheet CicilanHutang
-const CSV_URL_CICILAN = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
-// =======================================================================================
+// DataHutang (asumsi gid=0)
+const CSV_URL_HUTANG  =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
+
+// CicilanHutang (dari screenshot: gid=1090039187)
+const CSV_URL_CICILAN =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
+
+// ================================================================
 
 // Ambil CSV & parse ke array
 async function fetchCsv(url){
@@ -172,7 +176,7 @@ async function fetchCsv(url){
   return csvToArray(text);
 }
 
-// Parser CSV sederhana (tanpa koma di dalam sel)
+// Parser CSV sederhana
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
