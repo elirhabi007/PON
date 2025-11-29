@@ -90,7 +90,7 @@
   <p class="small">
     Model cicilan: <strong>bayar berdasarkan nominal, bukan per barang</strong>.<br>
     Total hutang = jumlah semua harga barang yang pernah diambil (sheet <code>DataHutang</code>).<br>
-    Total cicilan = jumlah semua pembayaran cicilan (sheet <code>CicilanHutang</code>).<br>
+    Total cicilan = jumlah semua total pembayaran (sheet <code>CicilanHutang</code>).<br>
     Sisa hutang = Total hutang - Total cicilan.
   </p>
 
@@ -145,7 +145,7 @@
             <br>Header: <code>timestamp | Tanggal | Barang | Photo | Harga Barang</code>.
           </li>
           <li>Sheet <code>CicilanHutang</code>:
-            <br>Header: <code>timestamp | Tanggal | Keterangan | Nominal Cicilan</code>.
+            <br>Header: <code>timestamp | Tanggal | Total pembayaran | Photo</code>.
           </li>
           <li>Di Google Sheets: <em>File → Share → Publish to web → format CSV</em> untuk kedua sheet.</li>
           <li>Copy URL CSV masing-masing sheet ke variabel <code>CSV_URL_HUTANG</code> dan <code>CSV_URL_CICILAN</code> di bawah.</li>
@@ -159,8 +159,8 @@
 // CSV_URL_HUTANG  -> URL CSV hasil publish untuk sheet "DataHutang"
 // CSV_URL_CICILAN -> URL CSV hasil publish untuk sheet "CicilanHutang"
 
-// CONTOH: sekarang masih pakai URL yang sama; ganti dengan URL aslimu
 const CSV_URL_HUTANG  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
+// GANTI dengan URL CSV asli dari sheet CicilanHutang
 const CSV_URL_CICILAN = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?output=csv";
 // =======================================================================================
 
@@ -264,11 +264,11 @@ function buildTableHTMLFromObjects(objs, columns){
       // Kolom Tanggal tidak ditampilkan
     ]);
 
-    // Tabel cicilan (CicilanHutang)
+    // Tabel cicilan (CicilanHutang) - pakai "Total pembayaran" + Photo
     cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanObjs, [
-      {key:"timestamp",       label:"timestamp"},
-      {key:"Keterangan",      label:"Keterangan"},
-      {key:"Nominal Cicilan", label:"Nominal Cicilan", type:"harga"}
+      {key:"timestamp",         label:"timestamp"},
+      {key:"Total pembayaran",  label:"Total pembayaran", type:"harga"},
+      {key:"Photo",             label:"Photo"}
       // Kolom Tanggal tidak ditampilkan
     ]);
 
@@ -277,9 +277,9 @@ function buildTableHTMLFromObjects(objs, columns){
       return sum + parseHarga(row["Harga Barang"]);
     }, 0);
 
-    // Hitung total cicilan = sum(Nominal Cicilan) dari CicilanHutang
+    // Hitung total cicilan = sum(Total pembayaran) dari CicilanHutang
     const totalCicilan = cicilanObjs.reduce((sum,row) => {
-      return sum + parseHarga(row["Nominal Cicilan"]);
+      return sum + parseHarga(row["Total pembayaran"]);
     }, 0);
 
     // Sisa hutang
