@@ -62,7 +62,6 @@
     .progress-wrap{
       margin-top:10px;
     }
-    /* Progress bar kembali seperti awal: full lebar kartu */
     .progress-bar{
       width:100%;
       height:10px;
@@ -80,6 +79,24 @@
       font-size:0.8rem;
       color:#4b5563;
       margin-top:4px;
+    }
+
+    /* icon link untuk kolom Photo */
+    .photo-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:24px;
+      height:24px;
+      border-radius:999px;
+      border:1px solid #d1d5db;
+      background:#f9fafb;
+      text-decoration:none;
+      font-size:14px;
+      cursor:pointer;
+    }
+    .photo-link:hover{
+      background:#e5e7eb;
     }
 
     @media(max-width:900px){
@@ -143,17 +160,13 @@
   </div>
 
 <script>
-// =============== URL CSV FIX SESUAI DOKUMEN KAMU =================
-
-// DataHutang (gid=0)
+// =============== URL CSV SESUAI DOKUMEN KAMU =================
 const CSV_URL_HUTANG  =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
 
-// CicilanHutang (gid tab CicilanHutang)
 const CSV_URL_CICILAN =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
-
-// ================================================================
+// ============================================================
 
 async function fetchCsv(url){
   const res = await fetch(url);
@@ -202,6 +215,25 @@ function parseHarga(x){
   return s === "" ? 0 : parseInt(s,10);
 }
 
+// 🔧 fungsi baru untuk sel Photo → icon link
+function renderCell(value, col){
+  // Jika kolom tipe harga
+  if(col.type === "harga"){
+    return formatRupiah(parseHarga(value));
+  }
+
+  // Jika kolom Photo → jadikan icon
+  if(col.key === "Photo"){
+    const url = (value || "").trim();
+    if(!url) return "-";
+    // icon: lingkaran kecil dengan simbol 🔗
+    return `<a href="${escapeHtml(url)}" class="photo-link" target="_blank" title="Lihat foto">🔗</a>`;
+  }
+
+  // default: teks biasa
+  return escapeHtml(value ?? "");
+}
+
 function buildTableHTMLFromObjects(objs, columns){
   if(!objs || objs.length === 0) return "<div class='small muted'>Tidak ada data.</div>";
   let html = "<table><thead><tr>";
@@ -210,11 +242,9 @@ function buildTableHTMLFromObjects(objs, columns){
   objs.forEach(o => {
     html += "<tr>";
     columns.forEach(col => {
-      let v = o[col.key] ?? "";
-      if(col.type === "harga"){
-        v = formatRupiah(parseHarga(v));
-      }
-      html += "<td>"+escapeHtml(v)+"</td>";
+      const rawVal = o[col.key] ?? "";
+      const rendered = renderCell(rawVal, col);
+      html += "<td>"+ rendered +"</td>";
     });
     html += "</tr>";
   });
@@ -243,6 +273,7 @@ function buildTableHTMLFromObjects(objs, columns){
     const hutangObjs  = csvToObjects(csvHutang);
     const cicilanObjs = csvToObjects(csvCicilan);
 
+    // Tabel DataHutang
     hutangWrap.innerHTML = buildTableHTMLFromObjects(hutangObjs, [
       {key:"timestamp",    label:"timestamp"},
       {key:"Barang",       label:"Barang"},
@@ -250,16 +281,19 @@ function buildTableHTMLFromObjects(objs, columns){
       {key:"Harga Barang", label:"Harga Barang", type:"harga"}
     ]);
 
+    // Tabel CicilanHutang
     cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanObjs, [
       {key:"timestamp",         label:"timestamp"},
       {key:"Total pembayaran",  label:"Total pembayaran", type:"harga"},
       {key:"Photo",             label:"Photo"}
     ]);
 
+    // Hitung total hutang
     const totalHutang = hutangObjs.reduce((sum,row) => {
       return sum + parseHarga(row["Harga Barang"]);
     }, 0);
 
+    // Hitung total cicilan
     const totalCicilan = cicilanObjs.reduce((sum,row) => {
       return sum + parseHarga(row["Total pembayaran"]);
     }, 0);
