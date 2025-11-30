@@ -35,7 +35,7 @@
     .filter-bar select{
       padding:4px 8px;
       border-radius:6px;
-      border:1px solid #d1d5db;
+      border:1px solid:#d1d5db;
       background:white;
       font-size:0.9rem;
     }
@@ -147,26 +147,18 @@
   <h1>Catatan Hutang & Cicilan</h1>
   <p class="small">
     Model cicilan: <strong>bayar berdasarkan nominal, bukan per barang</strong>.<br>
-    Total &amp; sisa hutang bisa difilter per bulan (berdasarkan <code>timestamp</code>).
+    Total &amp; sisa hutang bisa difilter per bulan dan tahun (berdasarkan <code>timestamp</code>).
   </p>
 
   <div class="filter-bar">
-    <label for="bulanSelect">Pilih bulan:</label>
-    <select id="bulanSelect">
-      <option value="all">Semua Bulan</option>
-      <option value="1">Januari</option>
-      <option value="2">Februari</option>
-      <option value="3">Maret</option>
-      <option value="4">April</option>
-      <option value="5">Mei</option>
-      <option value="6">Juni</option>
-      <option value="7">Juli</option>
-      <option value="8">Agustus</option>
-      <option value="9">September</option>
-      <option value="10">Oktober</option>
-      <option value="11">November</option>
-      <option value="12">Desember</option>
-    </select>
+    <label for="bulanSelect">Bulan:</label>
+    <!-- OPSI BULAN AKAN DIISI OTOMATIS DARI DATA -->
+    <select id="bulanSelect"></select>
+
+    <label for="tahunSelect">Tahun:</label>
+    <!-- OPSI TAHUN AKAN DIISI OTOMATIS DARI DATA -->
+    <select id="tahunSelect"></select>
+
     <span id="filterInfo" class="small muted"></span>
   </div>
 
@@ -192,11 +184,11 @@
         <h2>Ringkasan Hutang</h2>
         <div class="stat-grid">
           <div class="stat-item">
-            <div class="stat-label">Total Nilai Barang (s.d. bulan terpilih)</div>
+            <div class="stat-label">Total Nilai Barang (s.d. periode terpilih)</div>
             <div id="totalHutang" class="stat-value">-</div>
           </div>
           <div class="stat-item">
-            <div class="stat-label">Total Cicilan Dibayar (s.d. bulan terpilih)</div>
+            <div class="stat-label">Total Cicilan Dibayar (s.d. periode terpilih)</div>
             <div id="totalCicilan" class="stat-value">-</div>
           </div>
           <div class="stat-item">
@@ -218,17 +210,17 @@
 
 <script>
 // =============== URL CSV SESUAI DOKUMEN KAMU =================
-// DataHutang (sheet utama)
 const CSV_URL_HUTANG  =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
 
-// CicilanHutang (sheet kedua) – sudah DIBETULKAN
 const CSV_URL_CICILAN =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWz2QyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
 // ============================================================
 
 let allHutangObjs = [];
 let allCicilanObjs = [];
+let bulanTersedia = new Set(); // bulan yang ada di data
+let tahunTersedia = new Set(); // tahun yang ada di data
 
 async function fetchCsv(url){
   const res = await fetch(url);
@@ -240,12 +232,8 @@ async function fetchCsv(url){
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
-    return row.split(",").map(v => vreplaceQuotes(v));
+    return row.split(",").map(v => v.replace(/^"|"$/g,""));
   });
-}
-
-function vreplaceQuotes(v){
-  return v.replace(/^"|"$/g,"");
 }
 
 function csvToObjects(data){
@@ -289,16 +277,68 @@ function formatTimestampDateOnly(raw){
   return parts[0] || s;
 }
 
-// Ambil bulan (1-12) dari timestamp "dd/mm/yyyy hh:mm:ss"
-function getMonthFromTimestamp(raw){
-  if(!raw) return null;
+// Ambil {bulan, tahun} dari timestamp "dd/mm/yyyy hh:mm:ss"
+function getMonthYearFromTimestamp(raw){
+  if(!raw) return {month:null, year:null};
   const s = String(raw);
   const datePart = s.split(" ")[0] || s;   // "26/10/2025"
   const pieces = datePart.split("/");
-  if(pieces.length < 2) return null;
-  const m = parseInt(pieces[1], 10);
-  if(isNaN(m)) return null;
-  return m; // 1-12
+  if(pieces.length < 3) return {month:null, year:null};
+  const d = parseInt(pieces[0],10);
+  const m = parseInt(pieces[1],10);
+  const y = parseInt(pieces[2],10);
+  if(isNaN(d) || isNaN(m) || isNaN(y)) return {month:null, year:null};
+  return {month:m, year:y};
+}
+
+function namaBulan(num){
+  const arr = [
+    "", "Januari","Februari","Maret","April","Mei","Juni",
+    "Juli","Agustus","September","Oktober","November","Desember"
+  ];
+  return arr[num] || ("Bulan " + num);
+}
+
+// === ISI DROPDOWN BULAN & TAHUN DARI DATA ===
+function initSelectFilters(){
+  const bulanSelect = document.getElementById("bulanSelect");
+  const tahunSelect = document.getElementById("tahunSelect");
+
+  // ------ Bulan ------
+  bulanSelect.innerHTML = "";
+  const optBulanAll = document.createElement("option");
+  optBulanAll.value = "all";
+  optBulanAll.textContent = "Semua Bulan";
+  bulanSelect.appendChild(optBulanAll);
+
+  const sortedMonths = Array.from(bulanTersedia).sort((a,b)=>a-b);
+  sortedMonths.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = String(m);
+    opt.textContent = namaBulan(m);
+    bulanSelect.appendChild(opt);
+  });
+  bulanSelect.value = "all";
+
+  // ------ Tahun ------
+  tahunSelect.innerHTML = "";
+  const optTahunAll = document.createElement("option");
+  optTahunAll.value = "all";
+  optTahunAll.textContent = "Semua Tahun";
+  tahunSelect.appendChild(optTahunAll);
+
+  const sortedYears = Array.from(tahunTersedia).sort((a,b)=>a-b);
+  sortedYears.forEach(y => {
+    const opt = document.createElement("option");
+    opt.value = String(y);
+    opt.textContent = String(y);
+    tahunSelect.appendChild(opt);
+  });
+  tahunSelect.value = "all";
+
+  // event change
+  bulanSelect.addEventListener("change", applyFilterAndRender);
+  tahunSelect.addEventListener("change", applyFilterAndRender);
 }
 
 // render sel
@@ -335,10 +375,12 @@ function buildTableHTMLFromObjects(objs, columns){
   return html;
 }
 
-// Hitung & render berdasarkan bulan terpilih
+// Hitung & render berdasarkan bulan & tahun terpilih
 function applyFilterAndRender(){
   const bulanSelect = document.getElementById("bulanSelect");
+  const tahunSelect = document.getElementById("tahunSelect");
   const bulanVal = bulanSelect.value; // "all" atau "1"-"12"
+  const tahunVal = tahunSelect.value; // "all" atau "2025"
   const filterInfo = document.getElementById("filterInfo");
 
   const hutangWrap  = document.getElementById("hutangWrap");
@@ -350,21 +392,46 @@ function applyFilterAndRender(){
   const progressText   = document.getElementById("progressText");
 
   let bulanFilter = null;
-  if(bulanVal !== "all"){
-    bulanFilter = parseInt(bulanVal, 10);
+  let tahunFilter = null;
+  if(bulanVal !== "all") bulanFilter = parseInt(bulanVal, 10);
+  if(tahunVal !== "all") tahunFilter = parseInt(tahunVal, 10);
+
+  // helper: cek apakah row masuk TAMPILAN tabel
+  function matchDisplay(row){
+    const {month, year} = getMonthYearFromTimestamp(row["timestamp"]);
+    if(month === null || year === null) return false;
+    if(bulanFilter && month !== bulanFilter) return false;
+    if(tahunFilter && year !== tahunFilter) return false;
+    return true;
   }
 
-  // Filter row untuk TAMPILAN TABEL: hanya yang bulan == bulanFilter (kalau all -> semua)
-  const hutangForTable = allHutangObjs.filter(row => {
-    if(!bulanFilter) return true;
-    const m = getMonthFromTimestamp(row["timestamp"]);
-    return m === bulanFilter;
-  });
-  const cicilanForTable = allCicilanObjs.filter(row => {
-    if(!bulanFilter) return true;
-    const m = getMonthFromTimestamp(row["timestamp"]);
-    return m === bulanFilter;
-  });
+  // helper: cek apakah row masuk PERHITUNGAN (akumulasi)
+  function matchSum(row){
+    const {month, year} = getMonthYearFromTimestamp(row["timestamp"]);
+    if(month === null || year === null) return false;
+
+    // filter tahun dulu
+    if(tahunFilter && year !== tahunFilter) return false;
+
+    if(!bulanFilter){
+      // kalau bulan "Semua" -> semua bulan di tahun itu (atau semua tahun jika tahun juga "Semua")
+      return true;
+    }
+
+    if(!tahunFilter){
+      // hanya filter bulan, tanpa tahun: semua data dengan month <= bulanFilter (lintas tahun)
+      return month <= bulanFilter;
+    }
+
+    // FILTER GABUNG: akumulasi dari awal tahun terpilih sampai (tahunFilter, bulanFilter)
+    if(year < tahunFilter) return true;
+    if(year > tahunFilter) return false;
+    return month <= bulanFilter;
+  }
+
+  // Filter row untuk TAMPILAN TABEL
+  const hutangForTable = allHutangObjs.filter(matchDisplay);
+  const cicilanForTable = allCicilanObjs.filter(matchDisplay);
 
   hutangWrap.innerHTML = buildTableHTMLFromObjects(hutangForTable, [
     {key:"timestamp",    label:"Tanggal"},
@@ -379,17 +446,9 @@ function applyFilterAndRender(){
     {key:"Photo",             label:"Photo"}
   ]);
 
-  // Hitung TOTAL sampai bulan terpilih (carry over)
-  const hutangForSum = allHutangObjs.filter(row => {
-    if(!bulanFilter) return true;
-    const m = getMonthFromTimestamp(row["timestamp"]);
-    return m !== null && m <= bulanFilter;
-  });
-  const cicilanForSum = allCicilanObjs.filter(row => {
-    if(!bulanFilter) return true;
-    const m = getMonthFromTimestamp(row["timestamp"]);
-    return m !== null && m <= bulanFilter;
-  });
+  // Hitung TOTAL (akumulasi)
+  const hutangForSum = allHutangObjs.filter(matchSum);
+  const cicilanForSum = allCicilanObjs.filter(matchSum);
 
   const totalHutang = hutangForSum.reduce((sum,row) => {
     return sum + parseHarga(row["Harga Barang"]);
@@ -414,11 +473,22 @@ function applyFilterAndRender(){
     ? progress.toFixed(1) + "% hutang sudah dibayar"
     : "Belum ada data hutang";
 
-  if(!bulanFilter){
-    filterInfo.textContent = "Menampilkan semua bulan.";
+  // Teks info filter
+  let info = "Menampilkan ";
+  if(!bulanFilter && !tahunFilter){
+    info += "semua bulan & semua tahun.";
   }else{
-    filterInfo.textContent = "Menampilkan data bulan ke-" + bulanFilter + " (perhitungan akumulasi sampai bulan ini).";
+    if(bulanFilter) info += "bulan " + namaBulan(bulanFilter);
+    else info += "semua bulan";
+
+    info += " - ";
+
+    if(tahunFilter) info += "tahun " + tahunFilter;
+    else info += "semua tahun";
+
+    info += " (perhitungan akumulasi sampai periode ini).";
   }
+  filterInfo.textContent = info;
 }
 
 (async function main(){
@@ -434,13 +504,25 @@ function applyFilterAndRender(){
     allHutangObjs  = csvToObjects(csvHutang);
     allCicilanObjs = csvToObjects(csvCicilan);
 
-    // Render awal (semua bulan)
+    // KUMPULKAN bulan & tahun yang ada di timestamp (dari kedua sheet)
+    allHutangObjs.forEach(r => {
+      const {month, year} = getMonthYearFromTimestamp(r["timestamp"]);
+      if(month) bulanTersedia.add(month);
+      if(year)  tahunTersedia.add(year);
+    });
+    allCicilanObjs.forEach(r => {
+      const {month, year} = getMonthYearFromTimestamp(r["timestamp"]);
+      if(month) bulanTersedia.add(month);
+      if(year)  tahunTersedia.add(year);
+    });
+
+    // Inisialisasi dropdown bulan & tahun berdasarkan data
+    initSelectFilters();
+
+    // Render awal (semua bulan & semua tahun)
     applyFilterAndRender();
 
-    // Event ketika pilih bulan
-    document.getElementById("bulanSelect").addEventListener("change", applyFilterAndRender);
-
-    statusEl.textContent = "Status: data berhasil diambil. Silakan pilih bulan jika perlu.";
+    statusEl.textContent = "Status: data berhasil diambil. Silakan pilih bulan/tahun jika perlu.";
   }catch(err){
     console.error(err);
     statusEl.textContent = "Status: error - " + err.message;
