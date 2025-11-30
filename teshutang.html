@@ -20,19 +20,30 @@
     table{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.9rem;background:white}
     th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}
     th{background:#e5e7eb}
+
     .wrap{
       display:grid;
       grid-template-columns:2fr 1fr;
       gap:16px;
       margin-top:16px;
     }
+    .left-col{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .right-col{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
     .card{
       background:white;
       border-radius:8px;
       padding:12px;
       border:1px solid #e5e7eb;
       box-shadow:0 1px 2px rgba(0,0,0,0.04);
-      margin-bottom:10px;
     }
     .stat-grid{
       display:grid;
@@ -99,8 +110,17 @@
       background:#e5e7eb;
     }
 
+    /* Di HP: Ringkasan Hutang pindah ke atas (order 1), tabel di bawah (order 2) */
     @media(max-width:900px){
-      .wrap{grid-template-columns:1fr}
+      .wrap{
+        grid-template-columns:1fr;
+      }
+      .right-col{
+        order:1;
+      }
+      .left-col{
+        order:2;
+      }
     }
   </style>
 </head>
@@ -116,7 +136,7 @@
   <div id="status" class="small">Status: menyiapkan fetch...</div>
 
   <div class="wrap">
-    <div>
+    <div class="left-col">
       <div class="card">
         <h2>Riwayat Barang Diambil (DataHutang)</h2>
         <p class="small muted">Setiap baris adalah satu barang yang diambil.</p>
@@ -130,7 +150,7 @@
       </div>
     </div>
 
-    <div>
+    <div class="right-col">
       <div class="card">
         <h2>Ringkasan Hutang</h2>
         <div class="stat-grid">
@@ -215,22 +235,34 @@ function parseHarga(x){
   return s === "" ? 0 : parseInt(s,10);
 }
 
-// 🔧 fungsi baru untuk sel Photo → icon link
+// POTONG timestamp: "26/10/2025 21:50:58" -> "26/10/2025"
+function formatTimestampDateOnly(raw){
+  if(!raw) return "";
+  const s = String(raw);
+  const parts = s.split(" ");
+  return parts[0] || s;
+}
+
+// render sel
 function renderCell(value, col){
-  // Jika kolom tipe harga
+  // timestamp -> cuma tanggal
+  if(col.key === "timestamp"){
+    return escapeHtml(formatTimestampDateOnly(value));
+  }
+
+  // tipe harga
   if(col.type === "harga"){
     return formatRupiah(parseHarga(value));
   }
 
-  // Jika kolom Photo → jadikan icon
+  // kolom Photo -> icon
   if(col.key === "Photo"){
     const url = (value || "").trim();
     if(!url) return "-";
-    // icon: lingkaran kecil dengan simbol 🔗
     return `<a href="${escapeHtml(url)}" class="photo-link" target="_blank" title="Lihat foto">🔗</a>`;
   }
 
-  // default: teks biasa
+  // default teks biasa
   return escapeHtml(value ?? "");
 }
 
@@ -275,7 +307,7 @@ function buildTableHTMLFromObjects(objs, columns){
 
     // Tabel DataHutang
     hutangWrap.innerHTML = buildTableHTMLFromObjects(hutangObjs, [
-      {key:"timestamp",    label:"timestamp"},
+      {key:"timestamp",    label:"Tanggal"},
       {key:"Barang",       label:"Barang"},
       {key:"Photo",        label:"Photo"},
       {key:"Harga Barang", label:"Harga Barang", type:"harga"}
@@ -283,7 +315,7 @@ function buildTableHTMLFromObjects(objs, columns){
 
     // Tabel CicilanHutang
     cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanObjs, [
-      {key:"timestamp",         label:"timestamp"},
+      {key:"timestamp",         label:"Tanggal"},
       {key:"Total pembayaran",  label:"Total pembayaran", type:"harga"},
       {key:"Photo",             label:"Photo"}
     ]);
