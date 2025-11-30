@@ -22,7 +22,7 @@
     th{background:#e5e7eb}
 
     .filter-bar{
-      margin-top:10;
+      margin-top:10px;
       display:flex;
       flex-wrap:wrap;
       gap:8px;
@@ -35,7 +35,7 @@
     .filter-bar select{
       padding:4px 8px;
       border-radius:6px;
-      border:1px solid:#d1d5db;
+      border:1px solid #d1d5db;
       background:white;
       font-size:0.9rem;
     }
@@ -152,8 +152,21 @@
 
   <div class="filter-bar">
     <label for="bulanSelect">Pilih bulan:</label>
-    <!-- OPSI BULAN AKAN DIISI OTOMATIS DARI DATA -->
-    <select id="bulanSelect"></select>
+    <select id="bulanSelect">
+      <option value="all">Semua Bulan</option>
+      <option value="1">Januari</option>
+      <option value="2">Februari</option>
+      <option value="3">Maret</option>
+      <option value="4">April</option>
+      <option value="5">Mei</option>
+      <option value="6">Juni</option>
+      <option value="7">Juli</option>
+      <option value="8">Agustus</option>
+      <option value="9">September</option>
+      <option value="10">Oktober</option>
+      <option value="11">November</option>
+      <option value="12">Desember</option>
+    </select>
     <span id="filterInfo" class="small muted"></span>
   </div>
 
@@ -205,16 +218,17 @@
 
 <script>
 // =============== URL CSV SESUAI DOKUMEN KAMU =================
+// DataHutang (sheet utama)
 const CSV_URL_HUTANG  =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
 
+// CicilanHutang (sheet kedua) – sudah DIBETULKAN
 const CSV_URL_CICILAN =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
 // ============================================================
 
 let allHutangObjs = [];
 let allCicilanObjs = [];
-let bulanTersedia = new Set(); // bulan yang ada di data
 
 async function fetchCsv(url){
   const res = await fetch(url);
@@ -226,8 +240,12 @@ async function fetchCsv(url){
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
-    return row.split(",").map(v => v.replace(/^"|"$/g,""));
+    return row.split(",").map(v => vreplaceQuotes(v));
   });
+}
+
+function vreplaceQuotes(v){
+  return v.replace(/^"|"$/g,"");
 }
 
 function csvToObjects(data){
@@ -281,41 +299,6 @@ function getMonthFromTimestamp(raw){
   const m = parseInt(pieces[1], 10);
   if(isNaN(m)) return null;
   return m; // 1-12
-}
-
-function namaBulan(num){
-  const arr = [
-    "", "Januari","Februari","Maret","April","Mei","Juni",
-    "Juli","Agustus","September","Oktober","November","Desember"
-  ];
-  return arr[num] || ("Bulan " + num);
-}
-
-// === ISI DROPDOWN BULAN HANYA DARI BULAN YANG ADA DI DATA ===
-function initBulanSelect(){
-  const select = document.getElementById("bulanSelect");
-  select.innerHTML = ""; // bersihkan dulu
-
-  // Option Semua Bulan
-  const optAll = document.createElement("option");
-  optAll.value = "all";
-  optAll.textContent = "Semua Bulan";
-  select.appendChild(optAll);
-
-  // Ambil dan urutkan bulan yang ada
-  const sortedMonths = Array.from(bulanTersedia).sort((a,b)=>a-b);
-  sortedMonths.forEach(m => {
-    const opt = document.createElement("option");
-    opt.value = String(m);
-    opt.textContent = namaBulan(m);
-    select.appendChild(opt);
-  });
-
-  // default: Semua Bulan
-  select.value = "all";
-
-  // event change
-  select.addEventListener("change", applyFilterAndRender);
 }
 
 // render sel
@@ -390,7 +373,6 @@ function applyFilterAndRender(){
     {key:"Harga Barang", label:"Harga Barang", type:"harga"}
   ]);
 
-  cicilanForTable.length;
   cicilanWrap.innerHTML = buildTableHTMLFromObjects(cicilanForTable, [
     {key:"timestamp",         label:"Tanggal"},
     {key:"Total pembayaran",  label:"Total pembayaran", type:"harga"},
@@ -435,9 +417,7 @@ function applyFilterAndRender(){
   if(!bulanFilter){
     filterInfo.textContent = "Menampilkan semua bulan.";
   }else{
-    filterInfo.textContent =
-      "Menampilkan data bulan " + namaBulan(bulanFilter) +
-      " (perhitungan akumulasi sampai bulan ini).";
+    filterInfo.textContent = "Menampilkan data bulan ke-" + bulanFilter + " (perhitungan akumulasi sampai bulan ini).";
   }
 }
 
@@ -454,21 +434,11 @@ function applyFilterAndRender(){
     allHutangObjs  = csvToObjects(csvHutang);
     allCicilanObjs = csvToObjects(csvCicilan);
 
-    // KUMPULKAN bulan yang ada di timestamp (dari kedua sheet)
-    allHutangObjs.forEach(r => {
-      const m = getMonthFromTimestamp(r["timestamp"]);
-      if(m) bulanTersedia.add(m);
-    });
-    allCicilanObjs.forEach(r => {
-      const m = getMonthFromTimestamp(r["timestamp"]);
-      if(m) bulanTersedia.add(m);
-    });
-
-    // Inisialisasi dropdown bulan berdasarkan bulanTersedia
-    initBulanSelect();
-
     // Render awal (semua bulan)
     applyFilterAndRender();
+
+    // Event ketika pilih bulan
+    document.getElementById("bulanSelect").addEventListener("change", applyFilterAndRender);
 
     statusEl.textContent = "Status: data berhasil diambil. Silakan pilih bulan jika perlu.";
   }catch(err){
