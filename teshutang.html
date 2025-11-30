@@ -218,12 +218,13 @@
 
 <script>
 // =============== URL CSV SESUAI DOKUMEN KAMU =================
+// DataHutang (sheet utama)
 const CSV_URL_HUTANG  =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=0&single=true&output=csv";
 
+// CicilanHutang (sheet kedua) – sudah DIBETULKAN
 const CSV_URL_CICILAN =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWz2QyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
-// NOTE: kalau ada typo di URL, pakai URL yang benar dari versi sebelumnya.
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTz5Zo8oT3nuDLRZJhh0tqzTRfYWvCQCPjkOnAO5vBb4DTOosHMWzQyMLy3aKZW4XLASn2R4AiTC6Bj/pub?gid=1090039187&single=true&output=csv";
 // ============================================================
 
 let allHutangObjs = [];
@@ -239,8 +240,12 @@ async function fetchCsv(url){
 function csvToArray(str){
   const rows = str.trim().split(/\r?\n/);
   return rows.map(row => {
-    return row.split(",").map(v => v.replace(/^"|"$/g,""));
+    return row.split(",").map(v => vreplaceQuotes(v));
   });
+}
+
+function vreplaceQuotes(v){
+  return v.replace(/^"|"$/g,"");
 }
 
 function csvToObjects(data){
