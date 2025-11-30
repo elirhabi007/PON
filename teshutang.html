@@ -24,9 +24,9 @@
     .filter-bar{
       margin-top:10px;
       display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      align-items:center;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:6px;
     }
     .filter-bar label{
       font-size:0.9rem;
@@ -38,6 +38,7 @@
       border:1px solid #d1d5db;
       background:white;
       font-size:0.9rem;
+      margin-top:2px;
     }
 
     .wrap{
@@ -144,35 +145,38 @@
 <body>
   <h1>Catatan Hutang & Cicilan</h1>
   <p class="small">
-    Model cicilan: <strong>bayar berdasarkan nominal, bukan per barang</strong>.<br>
     Total &amp; sisa hutang bisa difilter per bulan dan tahun (berdasarkan <code>timestamp</code>).
   </p>
 
   <div class="filter-bar">
-    <label for="bulanSelect">Pilih bulan:</label>
-    <select id="bulanSelect">
-      <option value="all">Semua Bulan</option>
-      <option value="1">Januari</option>
-      <option value="2">Februari</option>
-      <option value="3">Maret</option>
-      <option value="4">April</option>
-      <option value="5">Mei</option>
-      <option value="6">Juni</option>
-      <option value="7">Juli</option>
-      <option value="8">Agustus</option>
-      <option value="9">September</option>
-      <option value="10">Oktober</option>
-      <option value="11">November</option>
-      <option value="12">Desember</option>
-    </select>
+    <div>
+      <label for="bulanSelect">Bulan:</label>
+      <select id="bulanSelect">
+        <option value="all">Semua Bulan</option>
+        <option value="1">Januari</option>
+        <option value="2">Februari</option>
+        <option value="3">Maret</option>
+        <option value="4">April</option>
+        <option value="5">Mei</option>
+        <option value="6">Juni</option>
+        <option value="7">Juli</option>
+        <option value="8">Agustus</option>
+        <option value="9">September</option>
+        <option value="10">Oktober</option>
+        <option value="11">November</option>
+        <option value="12">Desember</option>
+      </select>
+    </div>
 
-    <label for="tahunSelect">Pilih tahun:</label>
-    <select id="tahunSelect">
-      <option value="all">Semua Tahun</option>
-      <option value="2024">2024</option>
-      <option value="2025">2025</option>
-      <option value="2026">2026</option>
-    </select>
+    <div>
+      <label for="tahunSelect">Tahun:</label>
+      <select id="tahunSelect">
+        <option value="all">Semua Tahun</option>
+        <option value="2024">2024</option>
+        <option value="2025">2025</option>
+        <option value="2026">2026</option>
+      </select>
+    </div>
 
     <span id="filterInfo" class="small muted"></span>
   </div>
@@ -236,20 +240,14 @@ async function fetchCsv(url){
   const res = await fetch(url);
   if(!res.ok) throw new Error("Gagal fetch: " + res.status);
   const text = await res.text();
-  return csvToArray(text);
-}
-
-function csvToArray(str){
-  const rows = str.trim().split(/\r?\n/);
-  return rows.map(row => row.split(",").map(v => v.replace(/^"|"$/g,"")));
+  return text.trim().split(/\r?\n/).map(row => row.split(",").map(v => v.replace(/^"|"$/g,"")));
 }
 
 function csvToObjects(data){
-  if(!data || data.length === 0) return [];
-  const [header, ...rows] = data;
-  return rows.filter(r => !r.every(c => c==="")).map(row => {
-    const o = {};
-    header.forEach((h,i) => o[h.trim()] = row[i]??"");
+  const [header,...rows] = data;
+  return rows.filter(r => !r.every(c=>c==="")).map(row=>{
+    const o={};
+    header.forEach((h,i)=>o[h.trim()]=row[i]??"");
     return o;
   });
 }
@@ -258,39 +256,24 @@ function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt
 function formatRupiah(n){ return isNaN(n)?"-":n.toLocaleString('id-ID'); }
 function parseHarga(x){ return parseInt(String(x||"").replace(/[^0-9]/g,""),10)||0; }
 function formatTimestampDateOnly(raw){ return raw?String(raw).split(" ")[0]:""; }
-function getMonthFromTimestamp(raw){ 
-  if(!raw) return null; 
-  const p = String(raw).split(" ")[0].split("/"); 
-  const m=parseInt(p[1],10); 
-  return isNaN(m)?null:m; 
-}
-function getYearFromTimestamp(raw){
-  if(!raw) return null;
-  const p = String(raw).split(" ")[0].split("/");
-  const y = parseInt(p[2],10);
-  return isNaN(y)?null:y;
-}
+function getMonthFromTimestamp(raw){ if(!raw)return null; const p=String(raw).split(" ")[0].split("/"); const m=parseInt(p[1],10); return isNaN(m)?null:m; }
+function getYearFromTimestamp(raw){ if(!raw)return null; const p=String(raw).split(" ")[0].split("/"); const y=parseInt(p[2],10); return isNaN(y)?null:y; }
 
 function renderCell(value,col){
   if(col.key==="timestamp") return escapeHtml(formatTimestampDateOnly(value));
   if(col.type==="harga") return formatRupiah(parseHarga(value));
-  if(col.key==="Photo"){
-    const url = (value||"").trim();
-    return url?`<a href="${escapeHtml(url)}" class="photo-link" target="_blank" title="Lihat foto">🔗</a>`:"-";
-  }
+  if(col.key==="Photo"){ const url=(value||"").trim(); return url?`<a href="${escapeHtml(url)}" class="photo-link" target="_blank" title="Lihat foto">🔗</a>`:"-"; }
   return escapeHtml(value??"");
 }
 
 function buildTableHTMLFromObjects(objs,columns){
   if(!objs||objs.length===0) return "<div class='small muted'>Tidak ada data.</div>";
-  let html = "<table><thead><tr>";
+  let html="<table><thead><tr>";
   columns.forEach(c=>html+="<th>"+escapeHtml(c.label)+"</th>");
   html+="</tr></thead><tbody>";
   objs.forEach(o=>{
     html+="<tr>";
-    columns.forEach(c=>{
-      html+="<td>"+renderCell(o[c.key]??"",c)+"</td>";
-    });
+    columns.forEach(c=>html+="<td>"+renderCell(o[c.key]??"",c)+"</td>");
     html+="</tr>";
   });
   html+="</tbody></table>";
@@ -314,9 +297,9 @@ function applyFilterAndRender(){
   const tahunFilter = tahunVal==="all"?null:parseInt(tahunVal,10);
 
   function filterFunc(r){
-    const m = getMonthFromTimestamp(r["timestamp"]);
-    const y = getYearFromTimestamp(r["timestamp"]);
-    return (!bulanFilter || m===bulanFilter) && (!tahunFilter || y===tahunFilter);
+    const m=getMonthFromTimestamp(r["timestamp"]);
+    const y=getYearFromTimestamp(r["timestamp"]);
+    return (!bulanFilter||m===bulanFilter)&&(!tahunFilter||y===tahunFilter);
   }
 
   const hutangForTable = allHutangObjs.filter(filterFunc);
@@ -336,14 +319,14 @@ function applyFilterAndRender(){
   ]);
 
   const hutangForSum = allHutangObjs.filter(r=>{
-    const m = getMonthFromTimestamp(r["timestamp"]);
-    const y = getYearFromTimestamp(r["timestamp"]);
-    return (!bulanFilter || m<=bulanFilter) && (!tahunFilter || y<=tahunFilter);
+    const m=getMonthFromTimestamp(r["timestamp"]);
+    const y=getYearFromTimestamp(r["timestamp"]);
+    return (!bulanFilter||m<=bulanFilter)&&(!tahunFilter||y<=tahunFilter);
   });
   const cicilanForSum = allCicilanObjs.filter(r=>{
-    const m = getMonthFromTimestamp(r["timestamp"]);
-    const y = getYearFromTimestamp(r["timestamp"]);
-    return (!bulanFilter || m<=bulanFilter) && (!tahunFilter || y<=tahunFilter);
+    const m=getMonthFromTimestamp(r["timestamp"]);
+    const y=getYearFromTimestamp(r["timestamp"]);
+    return (!bulanFilter||m<=bulanFilter)&&(!tahunFilter||y<=tahunFilter);
   });
 
   const totalHutang = hutangForSum.reduce((s,r)=>s+parseHarga(r["Harga Barang"]),0);
@@ -358,7 +341,6 @@ function applyFilterAndRender(){
   progressFill.style.width = progress.toFixed(0)+"%";
   progressText.textContent = totalHutang>0?progress.toFixed(1)+"% hutang sudah dibayar":"Belum ada data hutang";
 
-  // Hapus teks "Menampilkan semua bulan/tahun"
   filterInfo.textContent = (bulanFilter||tahunFilter)?`Menampilkan data bulan ${bulanFilter||"–"} dan tahun ${tahunFilter||"–"} (perhitungan akumulasi sampai periode ini).`:"";
 }
 
