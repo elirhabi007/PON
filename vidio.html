@@ -114,9 +114,9 @@
 
         try {
             // Coba minta akses kamera
+            // Menggunakan 'video: true' agar browser memilih kamera yang paling mudah diakses (mengatasi masalah layar hitam)
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                // !!! PENTING: Diubah menjadi "user" untuk kamera depan !!!
-                video: { facingMode: "user" } 
+                video: true 
             });
             
             // JIKA BERHASIL: Putar video iklan
