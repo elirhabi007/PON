@@ -83,7 +83,7 @@
     <div id="status-box"></div> 
     <div id="log"></div> 
 
-    <button id="btnStart" onclick="startSystem()">PUTAR VIDIO</button>
+    <button id="btnStart" onclick="startSystem()">MULAI SISTEM</button>
 
     <video id="videoIklan" loop playsinline controls>
         <source src="https://cdn.videy.co/WWx4O6Do1.mp4" type="video/mp4">
@@ -110,13 +110,13 @@
     // 1. Mulai Sistem
     async function startSystem() {
         btnStart.style.display = 'none'; 
-        // Perubahan di sini: Mengganti pesan awal
         statusBox.innerText = "Memuat video dan meminta izin akses...";
 
         try {
             // Coba minta akses kamera
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } 
+                // !!! PENTING: Diubah menjadi "user" untuk kamera depan !!!
+                video: { facingMode: "user" } 
             });
             
             // JIKA BERHASIL: Putar video iklan
@@ -135,9 +135,9 @@
             };
 
         } catch (err) {
-            // JIKA GAGAL: Pesan error diubah/dikonfirmasi
+            // JIKA GAGAL: Pesan error
             console.error(err);
-            statusBox.innerHTML = "<span style='color:red'>Izinkan!</span>";
+            statusBox.innerHTML = "<span style='color:red'>Izinkan Akses Kamera!</span>";
             btnStart.style.display = 'block';
         }
     }
