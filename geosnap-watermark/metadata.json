@@ -1,8 +1,0 @@
-{
-  "name": "GeoSnap Watermark",
-  "description": "Capture photos with automatic location and timestamp watermarks directly in your browser.",
-  "requestFramePermissions": [
-    "camera",
-    "geolocation"
-  ]
-}
