@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Camera + GPS + Watermark Sederhana</title>
+  <style>
+    body{
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+      color:#111;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      align-items:center;
+      padding:18px;
+      max-width:900px;
+      margin:0 auto;
+    }
+    .stage{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      justify-content:center;
+      width:100%;
+    }
+    video{
+      border-radius:8px;
+      max-width:100%;
+      width:360px;
+      background:#000;
+    }
+    canvas{
+      display:block;
+      border-radius:8px;
+      width:360px;
+      max-width:100%;
+    }
+    .controls{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin-top:8px;
+    }
+    button,select,a.button{
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid #ccc;
+      background:#fff;
+      cursor:pointer;
+      font-size:14px;
+      text-decoration:none;
+      color:#111;
+      display:inline-block;
+    }
+    button:disabled,
+    a.button[disabled]{
+      opacity:.5;
+      cursor:not-allowed;
+      pointer-events:none;
+    }
+    .thumb{
+      max-width:200px;
+      border-radius:8px;
+    }
+    .note{
+      font-size:13px;
+      color:#555;
+      text-align:center;
+    }
+    pre{
+      background:#f5f5f5;
+      padding:10px;
+      border-radius:8px;
+      white-space:pre-wrap;
+      font-size:12px;
+      max-width:100%;
+      overflow:auto;
+    }
+    h1{
+      font-size:20px;
+      text-align:center;
+      margin-bottom:4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Camera + GPS + Watermark Sederhana</h1>
+  <p class="note">
+    Foto akan diberi watermark teks kecil di kiri bawah: nama, lokasi, dan tanggal & jam.
+  </p>
+
+  <div class="stage">
+    <div>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div class="controls">
+        <button id="startBtn">Mulai Kamera</button>
+        <button id="stopBtn" disabled>Berhenti</button>
+        <button id="captureBtn" disabled>Ambil Foto</button>
+
+        <label for="facing">Kamera:</label>
+        <select id="facing">
+          <option value="user">Depan (user)</option>
+          <option value="environment">Belakang (environment)</option>
+          <option value="auto" selected>Auto</option>
+        </select>
+
+        <button id="flipBtn" title="Ganti kamera (jika tersedia)">Ganti Kamera</button>
+        <a id="downloadBtn" class="button" download disabled>Download Foto</a>
+      </div>
+    </div>
+
+    <div>
+      <h3>Preview Foto</h3>
+      <img id="photo" class="thumb" alt="Foto preview" />
+      <h3>Info Lokasi</h3>
+      <pre id="infoLokasi">Belum ada data lokasi.</pre>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const flipBtn = document.getElementById('flipBtn');
+    const facingSelect = document.getElementById('facing');
+    const photoImg = document.getElementById('photo');
+    const infoLokasi = document.getElementById('infoLokasi');
+
+    let stream = null;
+    let currentFacingMode = 'auto';
+    let currentDeviceId = null;
+    let videoTracks = [];
+
+    // ===== KONFIGURASI WATERMARK SEDERHANA (KIRI BAWAH) =====
+    const WATERMARK_OWNER = "Arief Computer"; // bisa diubah
+    const WM_FONT_MAIN = "bold 16px system-ui"; // nama
+    const WM_FONT_INFO = "13px system-ui";      // lokasi & waktu
+    const WM_MARGIN = 16;   // jarak dari tepi kiri & bawah
+    const WM_LINE_SPACING = 4;
+
+    function formatTanggalIndo(date) {
+      const pad = n => n.toString().padStart(2, '0');
+      return `${pad(date.getDate())}-${pad(date.getMonth()+1)}-${date.getFullYear()} ` +
+             `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    async function startCamera() {
+      stopCamera();
+      const facing = facingSelect.value;
+      currentFacingMode = facing;
+
+      const constraints = {
+        audio: false,
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      if (facing === 'user' || facing === 'environment') {
+        constraints.video.facingMode = { exact: facing };
+      } else if (currentDeviceId) {
+        constraints.video.deviceId = { exact: currentDeviceId };
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        handleStream(stream);
+      } catch (err) {
+        try {
+          delete constraints.video.facingMode;
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          handleStream(stream);
+        } catch (err2) {
+          alert('Gagal mengakses kamera: ' + (err2.message || err.message));
+          console.error(err, err2);
+        }
+      }
+    }
+
+    function handleStream(s) {
+      stream = s;
+      video.srcObject = stream;
+      videoTracks = stream.getVideoTracks();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      captureBtn.disabled = false;
+      downloadBtn.setAttribute('disabled','disabled');
+      if (videoTracks.length) {
+        const settings = videoTracks[0].getSettings();
+        currentDeviceId = settings.deviceId || currentDeviceId;
+      }
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      captureBtn.disabled = true;
+    }
+
+    // ===== AMBIL GPS + REVERSE GEOCODING =====
+    function getLocationInfo() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({
+            success: false,
+            message: "Browser tidak mendukung Geolocation.",
+            lat: null,
+            lng: null,
+            kota: null,
+            alamat: null
+          });
+          return;
+        }
+
+        infoLokasi.textContent = "Mengambil lokasi GPS...";
+
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            let baseInfo =
+              "Latitude : " + lat + "\n" +
+              "Longitude: " + lng + "\n" +
+              "Akurasi : ~" + Math.round(acc) + " meter\n";
+
+            try {
+              infoLokasi.textContent = baseInfo + "\nMencari nama kota (reverse geocoding)...";
+
+              const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+              const res = await fetch(url, {
+                headers: {
+                  "Accept": "application/json",
+                  "User-Agent": "camera-gps-watermark-demo"
+                }
+              });
+              const data = await res.json();
+              const addr = data.address || {};
+              const kota = addr.city || addr.town || addr.village || addr.county || "Tidak diketahui";
+              const negara = addr.country || "";
+              const jalan = addr.road || "";
+              const desa = addr.suburb || addr.hamlet || "";
+              const kec = addr.state_district || addr.county || "";
+              const kodePos = addr.postcode || "";
+
+              let alamatText =
+                (jalan ? jalan + ", " : "") +
+                (desa ? desa + ", " : "") +
+                (kota ? kota + ", " : "") +
+                (kec ? kec + ", " : "") +
+                (negara ? negara + ", " : "") +
+                (kodePos ? kodePos : "");
+
+              baseInfo +=
+                "\nPerkiraan Kota : " + kota +
+                "\nAlamat Singkat : " + alamatText;
+
+              infoLokasi.textContent = baseInfo;
+
+              resolve({
+                success: true,
+                message: "OK",
+                lat,
+                lng,
+                kota,
+                alamat: alamatText
+              });
+            } catch (e) {
+              baseInfo += "\n\nGagal mengambil nama kota dari server: " + e.message;
+              infoLokasi.textContent = baseInfo;
+              resolve({
+                success: true,
+                message: "GPS OK, reverse geocoding gagal",
+                lat,
+                lng,
+                kota: null,
+                alamat: null
+              });
+            }
+          },
+          (err) => {
+            infoLokasi.textContent = "Gagal mengambil lokasi: " + err.message;
+            resolve({
+              success: false,
+              message: err.message,
+              lat: null,
+              lng: null,
+              kota: null,
+              alamat: null
+            });
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    async function capturePhotoWithWatermark() {
+      if (!video || video.readyState < 2) return;
+
+      const lokasi = await getLocationInfo();
+      const now = new Date();
+      const waktuStr = formatTanggalIndo(now);
+
+      let lokasiStr = "";
+      if (lokasi && lokasi.lat && lokasi.lng) {
+        const lat = lokasi.lat.toFixed(6);
+        const lng = lokasi.lng.toFixed(6);
+        if (lokasi.kota) {
+          lokasiStr = `${lokasi.kota} (${lat}, ${lng})`;
+        } else {
+          lokasiStr = `(${lat}, ${lng})`;
+        }
+      } else {
+        lokasiStr = "Lokasi tidak tersedia";
+      }
+
+      const baris1 = WATERMARK_OWNER;
+      const baris2 = lokasiStr;
+      const baris3 = waktuStr;
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // ===== WATERMARK TEKS KECIL DI KIRI BAWAH =====
+      ctx.save();
+
+      const margin = WM_MARGIN;
+
+      // baris 3 (paling bawah)
+      ctx.font = WM_FONT_INFO;
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.textBaseline = "bottom";
+
+      let y = canvas.height - margin;
+      const x = margin;
+
+      // garis luar tipis (biar sedikit terbaca di background terang)
+      ctx.strokeStyle = "rgba(0,0,0,0.7)";
+      ctx.lineWidth = 2;
+      ctx.strokeText(baris3, x, y);
+      ctx.fillText(baris3, x, y);
+
+      // baris 2 (di atas baris 3)
+      y -= 14 + WM_LINE_SPACING;
+      ctx.strokeText(baris2, x, y);
+      ctx.fillText(baris2, x, y);
+
+      // baris 1 (nama / brand, font sedikit lebih besar & bold)
+      y -= 18 + WM_LINE_SPACING;
+      ctx.font = WM_FONT_MAIN;
+      ctx.strokeText(baris1, x, y);
+      ctx.fillText(baris1, x, y);
+
+      ctx.restore();
+      // ===== END WATERMARK =====
+
+      const dataUrl = canvas.toDataURL('image/png');
+      photoImg.src = dataUrl;
+
+      downloadBtn.href = dataUrl;
+      downloadBtn.download = `photo-${now.toISOString().replace(/[:.]/g,'-')}.png`;
+      downloadBtn.removeAttribute('disabled');
+      canvas.style.display = 'block';
+    }
+
+    async function flipCamera() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        if (videoDevices.length < 2) {
+          return alert('Tidak ada kamera lain yang terdeteksi.');
+        }
+        const idx = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
+        const next = videoDevices[(idx + 1) % videoDevices.length];
+        currentDeviceId = next.deviceId;
+        facingSelect.value = 'auto';
+        await startCamera();
+      } catch (err) {
+        console.error(err);
+        alert('Gagal mengganti kamera.');
+      }
+    }
+
+    // ===== EVENT LISTENERS =====
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+    captureBtn.addEventListener('click', capturePhotoWithWatermark);
+    flipBtn.addEventListener('click', flipCamera);
+
+    downloadBtn.addEventListener('click', (e) => {
+      if (!photoImg.src) e.preventDefault();
+    });
+
+    window.addEventListener('pagehide', stopCamera);
+
+    facingSelect.addEventListener('change', () => {
+      if (stream) startCamera();
+    });
+
+    (async function precheck(){
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      try{
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        if (videoDevices.length === 1) flipBtn.disabled = true;
+      }catch(e){/* ignore */}
+    })();
+  </script>
+</body>
+</html>
